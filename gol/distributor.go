@@ -1,5 +1,9 @@
 package gol
 
+import (
+	"strconv"
+)
+
 type distributorChannels struct {
 	events     chan<- Event
 	ioCommand  chan<- ioCommand
@@ -51,24 +55,57 @@ func cellValue(count int) byte {
 	return 0
 }
 
-// distributor divides the work between workers and interacts with other goroutines.
+//generates the filename
+func generateFile(p Params) string {
+	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth)
+	return s
+}
 
+//recieves an array of bytes from ioInput
+func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
+	var world [][]byte
+	for y := 0; y < p.ImageHeight; y++ {
+		for x := 0; x < p.ImageWidth; x++ {
+			val := <-ioInput
+			//if val != 0 {
+			//	fmt.Println(x, y)
+			//}
+			world[y][x] = val
+		}
+	}
+	return world
+}
+func sendsworld(ioOutput chan<- uint8, p Params, world [][]byte) {
+	for y := 0; y < p.ImageHeight; y++ {
+		for x := 0; x < p.ImageWidth; x++ {
+			ioOutput <- world[y][x]
+		}
+	}
+}
+
+// distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
-	var world [][]byte
+	//sends the filename to io
+	c.ioFilename <- generateFile(p)
+	world := recieveworld(c.ioInput, p)
 	var newworld [][]byte
-	turn := 0
+	newworld = world
+	for turn := 0; turn <= p.Turns; turn++ {
+		x := turn
+		x = x + 1
 
-	// TODO: Execute all turns of the Game of Life.
+		// TODO: Execute all turns of the Game of Life.
 
-	// TODO: Report the final state using FinalTurnCompleteEvent.
+		// TODO: Report the final state using FinalTurnCompleteEvent.
 
-	// Make sure that the Io has finished any output before exiting.
-	c.ioCommand <- ioCheckIdle
-	<-c.ioIdle
+		// Make sure that the Io has finished any output before exiting.
+		c.ioCommand <- ioCheckIdle
+		<-c.ioIdle
+		c.events <- StateChange{turn, Quitting}
 
-	c.events <- StateChange{turn, Quitting}
-
+	}
+	sendsworld(c.ioOutput, p, newworld)
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
 }
