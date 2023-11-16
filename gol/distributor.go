@@ -1,6 +1,7 @@
 package gol
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -16,13 +17,18 @@ type distributorChannels struct {
 //count3x3 counts how many live cells there are in a 3 x 3 area centered around some x y
 // accounts for edges and corners
 func count3x3(grid [][]byte, x, y int, params Params) int {
+	//fmt.Println(x, y)
 	count := 0
 	for xi := -1; xi < 2; xi++ {
 		xi2 := x + xi
-		edgereset(xi2, params.ImageWidth)
+		//fmt.Println("xi:", xi)
+		xi2 = edgereset(xi2, params.ImageWidth-1)
+		//fmt.Println("xi2:", xi2)
 		for yi := -1; yi < 2; yi++ {
+			//fmt.Println("yi:", yi)
 			yi2 := yi + y
-			edgereset(yi2, params.ImageHeight)
+			yi2 = edgereset(yi2, params.ImageHeight-1)
+			//fmt.Println("yi:", yi2)
 			if grid[xi2][yi2] == 255 {
 				count += 1
 			}
@@ -33,10 +39,10 @@ func count3x3(grid [][]byte, x, y int, params Params) int {
 
 //if out of array loops the value back around again
 func edgereset(i int, max int) int {
-	switch i {
-	case -1:
-		return max - 1
-	case max:
+	if i < 0 {
+		return (max)
+	}
+	if i >= max {
 		return 0
 	}
 	return i
@@ -58,12 +64,16 @@ func cellValue(count int) byte {
 //generates the filename
 func generateFile(p Params) string {
 	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth)
+	fmt.Println(s)
 	return s
 }
 
 //recieves an array of bytes from ioInput
 func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
-	var world [][]byte
+	world := make([][]byte, p.ImageHeight)
+	for i := range world {
+		world[i] = make([]byte, p.ImageWidth)
+	}
 	for y := 0; y < p.ImageHeight; y++ {
 		for x := 0; x < p.ImageWidth; x++ {
 			val := <-ioInput
@@ -82,30 +92,61 @@ func sendsworld(ioOutput chan<- uint8, p Params, world [][]byte) {
 		}
 	}
 }
+func newworld(world [][]byte, p Params) [][]byte {
+
+	newWorld := make([][]byte, p.ImageHeight)
+	for i := range newWorld {
+		newWorld[i] = make([]byte, p.ImageWidth)
+	}
+
+	for y := 0; y < p.ImageHeight; y++ {
+		for x := 0; x < p.ImageWidth; x++ {
+			newWorld[y][x] = cellValue(count3x3(world, x, y, p))
+		}
+	}
+	printworld(newWorld)
+	return newWorld
+}
+
+func printworld(world [][]byte) {
+	for _, v := range world {
+		var b []byte
+		for _, v2 := range v {
+			if v2 == 255 {
+				b = append(b, 1)
+			} else {
+				b = append(b, v2)
+			}
+		}
+		fmt.Println(b)
+	}
+	println("")
+}
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
+	fmt.Println("1")
+	c.ioCommand <- ioInput
 	//sends the filename to io
 	c.ioFilename <- generateFile(p)
+	fmt.Println("2")
 	world := recieveworld(c.ioInput, p)
-	var newworld [][]byte
-	newworld = world
+	printworld(world)
+	turn := 0
 	for turn := 0; turn <= p.Turns; turn++ {
-		x := turn
-		x = x + 1
-
+		println("turn:", turn)
+		world = newworld(world, p)
 		// TODO: Execute all turns of the Game of Life.
 
 		// TODO: Report the final state using FinalTurnCompleteEvent.
 
+	}
+	c.
 		// Make sure that the Io has finished any output before exiting.
 		c.ioCommand <- ioCheckIdle
-		<-c.ioIdle
-		c.events <- StateChange{turn, Quitting}
-
-	}
-	sendsworld(c.ioOutput, p, newworld)
+	<-c.ioIdle
+	c.events <- StateChange{turn, Quitting}
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
 }
