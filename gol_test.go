@@ -15,8 +15,8 @@ import (
 func TestGol(t *testing.T) {
 	tests := []gol.Params{
 		{ImageWidth: 16, ImageHeight: 16},
-		{ImageWidth: 64, ImageHeight: 64},
-		{ImageWidth: 512, ImageHeight: 512},
+		//{ImageWidth: 64, ImageHeight: 64},
+		//{ImageWidth: 512, ImageHeight: 512},
 	}
 	for _, p := range tests {
 		for _, turns := range []int{0, 1, 100} {

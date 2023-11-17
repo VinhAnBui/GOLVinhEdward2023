@@ -3,6 +3,7 @@ package gol
 import (
 	"fmt"
 	"strconv"
+	"uk.ac.bris.cs/gameoflife/util"
 )
 
 type distributorChannels struct {
@@ -29,7 +30,7 @@ func count3x3(grid [][]byte, x, y int, params Params) int {
 			yi2 := yi + y
 			yi2 = edgereset(yi2, params.ImageHeight-1)
 			//fmt.Println("yi:", yi2)
-			if grid[xi2][yi2] == 255 {
+			if grid[yi2][xi2] == 255 {
 				count += 1
 			}
 		}
@@ -51,12 +52,14 @@ func edgereset(i int, max int) int {
 //cell value should return the value of a cell given its count
 //count should be how many living cells are in a 3x3 block of cells centred at the cell in question
 //count should already account for whether the centre cell is dead or alive
-func cellValue(count int) byte {
+func cellValue(count int, cellvalue byte) byte {
 	switch count {
 	case 3:
 		return 255
 	case 4:
-		return 255
+		if cellvalue != 0 {
+			return 255
+		}
 	}
 	return 0
 }
@@ -101,13 +104,14 @@ func newworld(world [][]byte, p Params) [][]byte {
 
 	for y := 0; y < p.ImageHeight; y++ {
 		for x := 0; x < p.ImageWidth; x++ {
-			newWorld[y][x] = cellValue(count3x3(world, x, y, p))
+			newWorld[y][x] = cellValue(count3x3(world, x, y, p), world[y][x])
 		}
 	}
 	printworld(newWorld)
 	return newWorld
 }
 
+//usefil for debugging reasons
 func printworld(world [][]byte) {
 	for _, v := range world {
 		var b []byte
@@ -122,6 +126,18 @@ func printworld(world [][]byte) {
 	}
 	println("")
 }
+func alivecells(world [][]byte) []util.Cell {
+
+	var aliveCells []util.Cell
+	for yi, row := range world {
+		for xi, value := range row {
+			if value == 255 {
+				aliveCells = append(aliveCells, util.Cell{xi, yi})
+			}
+		}
+	}
+	return aliveCells
+}
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
@@ -134,17 +150,14 @@ func distributor(p Params, c distributorChannels) {
 	world := recieveworld(c.ioInput, p)
 	printworld(world)
 	turn := 0
-	for turn := 0; turn <= p.Turns; turn++ {
+	for turn < p.Turns {
+		turn = turn + 1
 		println("turn:", turn)
 		world = newworld(world, p)
-		// TODO: Execute all turns of the Game of Life.
-
-		// TODO: Report the final state using FinalTurnCompleteEvent.
-
 	}
-	c.
-		// Make sure that the Io has finished any output before exiting.
-		c.ioCommand <- ioCheckIdle
+	c.events <- FinalTurnComplete{turn, alivecells(world)}
+	// Make sure that the Io has finished any output before exiting.
+	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 	c.events <- StateChange{turn, Quitting}
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
