@@ -23,12 +23,12 @@ func count3x3(grid [][]byte, x, y int, params Params) int {
 	for xi := -1; xi < 2; xi++ {
 		xi2 := x + xi
 		//fmt.Println("xi:", xi)
-		xi2 = edgereset(xi2, params.ImageWidth-1)
+		xi2 = edgereset(xi2, params.ImageWidth)
 		//fmt.Println("xi2:", xi2)
 		for yi := -1; yi < 2; yi++ {
 			//fmt.Println("yi:", yi)
 			yi2 := yi + y
-			yi2 = edgereset(yi2, params.ImageHeight-1)
+			yi2 = edgereset(yi2, params.ImageHeight)
 			//fmt.Println("yi:", yi2)
 			if grid[yi2][xi2] == 255 {
 				count += 1
@@ -41,7 +41,7 @@ func count3x3(grid [][]byte, x, y int, params Params) int {
 //if out of array loops the value back around again
 func edgereset(i int, max int) int {
 	if i < 0 {
-		return (max)
+		return (max - 1)
 	}
 	if i >= max {
 		return 0
@@ -51,7 +51,6 @@ func edgereset(i int, max int) int {
 
 //cell value should return the value of a cell given its count
 //count should be how many living cells are in a 3x3 block of cells centred at the cell in question
-//count should already account for whether the centre cell is dead or alive
 func cellValue(count int, cellvalue byte) byte {
 	switch count {
 	case 3:
