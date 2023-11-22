@@ -3,6 +3,7 @@ package gol
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
@@ -95,46 +96,38 @@ func sendsworld(ioOutput chan<- uint8, p Params, world [][]byte) {
 		}
 	}
 }
-func partWorld(startY, endY, startX, endX int, world [][]byte, rtrn chan [][]byte, params Params) {
-	rtrn <- stageConverter(startY, endY, startX, endX, world, params)
+func partWorld(startY, endY, startX, endX int, world, newWorld [][]byte, params Params, group *sync.WaitGroup) {
+	stageConverter(startY, endY, startX, endX, world, newWorld, params)
+	group.Done()
 }
-func stageConverter(startY, endY, startX, endX int, world [][]uint8, params Params) [][]uint8 {
-	height := endY - startY
-	width := endX - startX
+func stageConverter(startY, endY, startX, endX int, world, newWorld [][]byte, params Params) {
 
-	newWorld := make([][]byte, height)
-	for i := range newWorld {
-		newWorld[i] = make([]byte, width)
-	}
 	for y := startY; y < endY; y++ {
 		for x := startX; x < endX; x++ {
 			newWorld[y][x] = cellValue(count3x3(world, x, y, params), world[y][x])
 		}
 	}
-	return newWorld
 }
-func newworld(world [][]byte, p Params) [][]byte {
-
-	newWorld := make([][]byte, p.ImageHeight)
-	for i := range newWorld {
-		newWorld[i] = make([]byte, p.ImageWidth)
-	}
+func newworld(world, newWorld [][]byte, p Params) {
 	if p.Threads == 1 {
-		newWorld = stageConverter(0, p.ImageHeight, 0, p.ImageWidth, world, p)
+		stageConverter(0, p.ImageHeight, 0, p.ImageWidth, world, newWorld, p)
 	} else {
-
-		var workerChannels []chan [][]uint8
+		var wg sync.WaitGroup
 		heightsplit := p.ImageHeight / p.Threads
-		for i := 0; i < p.Threads; i++ {
-			workerChannels = append(workerChannels, make(chan [][]byte))
-			go partWorld(heightsplit*i, heightsplit*(i+1), 0, p.ImageWidth, world, workerChannels[i], p)
+		if p.ImageHeight%p.Threads != 0 {
+			heightsplit += 1
 		}
 		for i := 0; i < p.Threads; i++ {
-			x := <-workerChannels[i]
-			newWorld = append(newWorld, x...)
+			wg.Add(1)
+			startY := heightsplit * i
+			endY := heightsplit * (i + 1)
+			if endY > p.ImageHeight {
+				endY = p.ImageHeight
+			}
+			go partWorld(startY, endY, 0, p.ImageWidth, world, newWorld, p, &wg)
 		}
+		wg.Wait()
 	}
-	return newWorld
 }
 
 //useful for debugging reasons
@@ -174,14 +167,28 @@ func distributor(p Params, c distributorChannels) {
 	c.ioFilename <- generateFile(p)
 	fmt.Println("2")
 
-	world := recieveworld(c.ioInput, p)
-	turn := 0
-	for turn < p.Turns {
-		turn = turn + 1
-		world = newworld(world, p)
+	worldEven := recieveworld(c.ioInput, p)
+
+	worldOdd := make([][]byte, p.ImageHeight)
+	for i := range worldOdd {
+		worldOdd[i] = make([]byte, p.ImageWidth)
 	}
 
-	c.events <- FinalTurnComplete{turn, alivecells(world)}
+	turn := 0
+	for turn < p.Turns {
+		if turn%2 == 0 {
+			newworld(worldEven, worldOdd, p)
+		} else {
+			newworld(worldOdd, worldEven, p)
+		}
+		turn++
+	}
+
+	if turn%2 != 0 {
+		c.events <- FinalTurnComplete{turn, alivecells(worldOdd)}
+	} else {
+		c.events <- FinalTurnComplete{turn, alivecells(worldEven)}
+	}
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
