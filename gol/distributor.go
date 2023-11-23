@@ -65,9 +65,16 @@ func cellValue(count int, cellvalue byte) byte {
 	return 0
 }
 
-//generates the filename
-func generateFile(p Params) string {
+//generates the filename for inputting
+func filenameInput(p Params) string {
 	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth)
+	fmt.Println(s)
+	return s
+}
+
+//generates the filename for outputting
+func filenameOutput(p Params) string {
+	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.Turns) + "-" + strconv.Itoa(p.Threads)
 	fmt.Println(s)
 	return s
 }
@@ -89,10 +96,11 @@ func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
 	}
 	return world
 }
-func sendsworld(ioOutput chan<- uint8, p Params, world [][]byte) {
-	for y := 0; y < p.ImageHeight; y++ {
-		for x := 0; x < p.ImageWidth; x++ {
-			ioOutput <- world[y][x]
+func sendsworld(ioOutput chan<- uint8, world [][]byte) {
+	for y, row := range world {
+		for x, v := range row {
+			ioOutput <- v
+			fmt.Println("coords:", strconv.Itoa(x), strconv.Itoa(y))
 		}
 	}
 }
@@ -161,11 +169,9 @@ func alivecells(world [][]byte) []util.Cell {
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
-	fmt.Println("1")
 	c.ioCommand <- ioInput
 	//sends the filename to io
-	c.ioFilename <- generateFile(p)
-	fmt.Println("2")
+	c.ioFilename <- filenameInput(p)
 
 	worldEven := recieveworld(c.ioInput, p)
 
@@ -181,12 +187,16 @@ func distributor(p Params, c distributorChannels) {
 		} else {
 			newworld(worldOdd, worldEven, p)
 		}
+		c.events <- TurnComplete{turn}
 		turn++
 	}
-
+	c.ioCommand <- ioOutput
+	c.ioFilename <- filenameOutput(p)
 	if turn%2 != 0 {
+		sendsworld(c.ioOutput, worldOdd)
 		c.events <- FinalTurnComplete{turn, alivecells(worldOdd)}
 	} else {
+		sendsworld(c.ioOutput, worldEven)
 		c.events <- FinalTurnComplete{turn, alivecells(worldEven)}
 	}
 	// Make sure that the Io has finished any output before exiting.
