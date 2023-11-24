@@ -74,7 +74,7 @@ func filenameInput(p Params) string {
 
 //generates the filename for outputting
 func filenameOutput(p Params) string {
-	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.Turns) + "-" + strconv.Itoa(p.Threads)
+	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.Turns)
 	fmt.Println(s)
 	return s
 }
@@ -91,16 +91,21 @@ func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
 			//if val != 0 {
 			//	fmt.Println(x, y)
 			//}
+			if val != 0 {
+				//fmt.Println("send coords:", strconv.Itoa(x), strconv.Itoa(y))
+			}
 			world[y][x] = val
 		}
 	}
 	return world
 }
 func sendsworld(ioOutput chan<- uint8, world [][]byte) {
-	for y, row := range world {
-		for x, v := range row {
+	for _, row := range world {
+		for _, v := range row {
 			ioOutput <- v
-			fmt.Println("coords:", strconv.Itoa(x), strconv.Itoa(y))
+			if v != 0 {
+				//fmt.Println("send coords:", strconv.Itoa(x), strconv.Itoa(y))
+			}
 		}
 	}
 }
