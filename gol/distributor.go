@@ -32,7 +32,7 @@ func filenameOutput(p Params) string {
 }
 
 //recieves an array of bytes from ioInput
-func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
+func recieveworld(ioInput <-chan uint8, p Params, events chan<- Event) [][]byte {
 	world := make([][]byte, p.ImageHeight)
 	for i := range world {
 		world[i] = make([]byte, p.ImageWidth)
@@ -44,7 +44,7 @@ func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
 			//	fmt.Println(x, y)
 			//}
 			if val != 0 {
-				//fmt.Println("send coords:", strconv.Itoa(x), strconv.Itoa(y))
+				events <- CellFlipped{0, util.Cell{x, y}}
 			}
 			world[y][x] = val
 		}
@@ -110,22 +110,26 @@ func cellValue(count int, cellvalue byte) byte {
 	}
 	return 0
 }
-func partWorld(startY, endY, startX, endX int, world, newWorld [][]byte, params Params, group *sync.WaitGroup) {
-	stageConverter(startY, endY, startX, endX, world, newWorld, params)
+func partWorld(turn, startY, endY, startX, endX int, world, newWorld [][]byte, params Params, group *sync.WaitGroup, events chan<- Event) {
+	stageConverter(turn, startY, endY, startX, endX, world, newWorld, params, events)
 	group.Done()
 }
-func stageConverter(startY, endY, startX, endX int, world, newWorld [][]byte, params Params) {
+func stageConverter(turn, startY, endY, startX, endX int, world, newWorld [][]byte, params Params, events chan<- Event) {
 
 	for y := startY; y < endY; y++ {
 		for x := startX; x < endX; x++ {
 			newWorld[y][x] = cellValue(count3x3(world, x, y, params), world[y][x])
+			if newWorld[y][x] != world[y][x] {
+				events <- CellFlipped{turn, util.Cell{x, y}}
+			}
+
 		}
 	}
 }
-func newworld(world, newWorld [][]byte, p Params, mutex *sync.Mutex) {
+func newworld(turn int, world, newWorld [][]byte, p Params, mutex *sync.Mutex, events chan<- Event) {
 	mutex.Lock()
 	if p.Threads == 1 {
-		stageConverter(0, p.ImageHeight, 0, p.ImageWidth, world, newWorld, p)
+		stageConverter(turn, 0, p.ImageHeight, 0, p.ImageWidth, world, newWorld, p, events)
 	} else {
 		var wg sync.WaitGroup
 		heightsplit := p.ImageHeight / p.Threads
@@ -139,7 +143,7 @@ func newworld(world, newWorld [][]byte, p Params, mutex *sync.Mutex) {
 			if endY > p.ImageHeight {
 				endY = p.ImageHeight
 			}
-			go partWorld(startY, endY, 0, p.ImageWidth, world, newWorld, p, &wg)
+			go partWorld(turn, startY, endY, 0, p.ImageWidth, world, newWorld, p, &wg, events)
 		}
 		wg.Wait()
 	}
@@ -206,7 +210,7 @@ func distributor(p Params, c distributorChannels) {
 
 	c.ioCommand <- ioInput
 	c.ioFilename <- filenameInput(p)
-	worldEven := recieveworld(c.ioInput, p)
+	worldEven := recieveworld(c.ioInput, p, c.events)
 
 	worldOdd := make([][]byte, p.ImageHeight)
 	for i := range worldOdd {
@@ -224,9 +228,9 @@ func distributor(p Params, c distributorChannels) {
 	for turn < p.Turns {
 		turnLock.Lock()
 		if turn%2 == 0 {
-			newworld(worldEven, worldOdd, p, EvenMutex)
+			newworld(turn, worldEven, worldOdd, p, EvenMutex, c.events)
 		} else {
-			newworld(worldOdd, worldEven, p, oddMutex)
+			newworld(turn, worldOdd, worldEven, p, oddMutex, c.events)
 		}
 		c.events <- TurnComplete{turn}
 		turn++
