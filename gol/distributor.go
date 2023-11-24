@@ -10,6 +10,7 @@ import (
 
 type distributorChannels struct {
 	events     chan<- Event
+	keyPresses <-chan rune
 	ioCommand  chan<- ioCommand
 	ioIdle     <-chan bool
 	ioFilename chan<- string
@@ -204,6 +205,44 @@ func aliveCount(world [][]byte) int {
 	}
 	return count
 }
+func waitKeypress(turn *int, worldOdd, worldEven [][]byte, turnLock *sync.Mutex, c distributorChannels, p Params) {
+	for {
+		select {
+		// Block and wait for requests from the distributor
+		case command := <-c.keyPresses:
+			turnLock.Lock()
+			switch command {
+			case 's':
+				c.ioCommand <- ioOutput
+				c.ioFilename <- strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(*turn)
+				if *turn%2 == 0 {
+					sendsworld(c.ioOutput, worldEven)
+				} else {
+					sendsworld(c.ioOutput, worldOdd)
+				}
+				c.ioCommand <- ioCheckIdle
+				<-c.ioIdle
+			case 'q':
+				c.ioCommand <- ioOutput
+				c.ioFilename <- strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(*turn)
+				if *turn%2 == 0 {
+					sendsworld(c.ioOutput, worldEven)
+				} else {
+					sendsworld(c.ioOutput, worldOdd)
+				}
+				c.ioCommand <- ioCheckIdle
+				<-c.ioIdle
+				c.events <- StateChange{*turn, Quitting}
+				close(c.events)
+			case 'p':
+				fmt.Println("Turn:", *turn)
+				<-c.keyPresses
+				fmt.Println("Continuing")
+			}
+			turnLock.Unlock()
+		}
+	}
+}
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
@@ -216,15 +255,14 @@ func distributor(p Params, c distributorChannels) {
 	for i := range worldOdd {
 		worldOdd[i] = make([]byte, p.ImageWidth)
 	}
-
 	//controls access to the odd or even matrix
 	var oddMutex = &sync.Mutex{}
 	var EvenMutex = &sync.Mutex{}
 	//controls access to turn
 	var turnLock = &sync.Mutex{}
-
 	turn := 0
 	go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
+	go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
 	for turn < p.Turns {
 		turnLock.Lock()
 		if turn%2 == 0 {
@@ -236,6 +274,7 @@ func distributor(p Params, c distributorChannels) {
 		turn++
 		turnLock.Unlock()
 	}
+
 	c.ioCommand <- ioOutput
 	c.ioFilename <- filenameOutput(p)
 	if turn%2 != 0 {
@@ -253,6 +292,5 @@ func distributor(p Params, c distributorChannels) {
 	<-c.ioIdle
 	c.events <- StateChange{turn, Quitting}
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
-
 	close(c.events)
 }
