@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
@@ -14,55 +15,6 @@ type distributorChannels struct {
 	ioFilename chan<- string
 	ioOutput   chan<- uint8
 	ioInput    <-chan uint8
-}
-
-//count3x3 counts how many live cells there are in a 3 x 3 area centered around some x y
-// accounts for edges and corners
-func count3x3(grid [][]byte, x, y int, params Params) int {
-	//fmt.Println(x, y)
-	count := 0
-	for xi := -1; xi < 2; xi++ {
-		xi2 := x + xi
-		//fmt.Println("xi:", xi)
-		xi2 = edgereset(xi2, params.ImageWidth)
-		//fmt.Println("xi2:", xi2)
-		for yi := -1; yi < 2; yi++ {
-			//fmt.Println("yi:", yi)
-			yi2 := yi + y
-			yi2 = edgereset(yi2, params.ImageHeight)
-			//fmt.Println("yi:", yi2)
-			if grid[yi2][xi2] == 255 {
-				count += 1
-			}
-		}
-	}
-	return count
-}
-
-//if out of array loops the value back around again
-//max is max width or height
-func edgereset(i int, max int) int {
-	if i < 0 {
-		return (max - 1)
-	}
-	if i >= max {
-		return 0
-	}
-	return i
-}
-
-//cell value should return the value of a cell given its count
-//count should be how many living cells are in a 3x3 block of cells centred at the cell in question
-func cellValue(count int, cellvalue byte) byte {
-	switch count {
-	case 3:
-		return 255
-	case 4:
-		if cellvalue != 0 {
-			return 255
-		}
-	}
-	return 0
 }
 
 //generates the filename for inputting
@@ -99,6 +51,8 @@ func recieveworld(ioInput <-chan uint8, p Params) [][]byte {
 	}
 	return world
 }
+
+//sends world to ioOutput
 func sendsworld(ioOutput chan<- uint8, world [][]byte) {
 	for _, row := range world {
 		for _, v := range row {
@@ -108,6 +62,53 @@ func sendsworld(ioOutput chan<- uint8, world [][]byte) {
 			}
 		}
 	}
+}
+
+//GOL logic
+//count3x3 counts how many live cells there are in a 3 x 3 area centered around some x y
+func count3x3(grid [][]byte, x, y int, params Params) int {
+	//fmt.Println(x, y)
+	count := 0
+	for xi := -1; xi < 2; xi++ {
+		xi2 := x + xi
+		//fmt.Println("xi:", xi)
+		xi2 = edgereset(xi2, params.ImageWidth)
+		//fmt.Println("xi2:", xi2)
+		for yi := -1; yi < 2; yi++ {
+			//fmt.Println("yi:", yi)
+			yi2 := yi + y
+			yi2 = edgereset(yi2, params.ImageHeight)
+			//fmt.Println("yi:", yi2)
+			if grid[yi2][xi2] == 255 {
+				count += 1
+			}
+		}
+	}
+	return count
+}
+
+//if out of array loops the value back around again
+func edgereset(i int, max int) int {
+	if i < 0 {
+		return (max - 1)
+	}
+	if i >= max {
+		return 0
+	}
+	return i
+}
+
+//cell value should return the value of a cell given its count
+func cellValue(count int, cellvalue byte) byte {
+	switch count {
+	case 3:
+		return 255
+	case 4:
+		if cellvalue != 0 {
+			return 255
+		}
+	}
+	return 0
 }
 func partWorld(startY, endY, startX, endX int, world, newWorld [][]byte, params Params, group *sync.WaitGroup) {
 	stageConverter(startY, endY, startX, endX, world, newWorld, params)
@@ -121,7 +122,8 @@ func stageConverter(startY, endY, startX, endX int, world, newWorld [][]byte, pa
 		}
 	}
 }
-func newworld(world, newWorld [][]byte, p Params) {
+func newworld(world, newWorld [][]byte, p Params, mutex *sync.Mutex) {
+	mutex.Lock()
 	if p.Threads == 1 {
 		stageConverter(0, p.ImageHeight, 0, p.ImageWidth, world, newWorld, p)
 	} else {
@@ -141,6 +143,7 @@ func newworld(world, newWorld [][]byte, p Params) {
 		}
 		wg.Wait()
 	}
+	mutex.Unlock()
 }
 
 //useful for debugging reasons
@@ -158,7 +161,7 @@ func printworld(world [][]byte) {
 	}
 	println("")
 }
-func alivecells(world [][]byte) []util.Cell {
+func aliveCells(world [][]byte) []util.Cell {
 
 	var aliveCells []util.Cell
 	for yi, row := range world {
@@ -170,14 +173,39 @@ func alivecells(world [][]byte) []util.Cell {
 	}
 	return aliveCells
 }
+func every2seconds(oddWorld, evenWorld [][]byte, turn *int, oddMutex, evenMutex, turnLock *sync.Mutex, events chan<- Event) {
+	for {
+		time.Sleep(2 * time.Second)
+		turnLock.Lock()
+		if *turn%2 == 0 {
+			evenMutex.Lock()
+			events <- AliveCellsCount{*turn, aliveCount(evenWorld)}
+			evenMutex.Unlock()
+		} else {
+			oddMutex.Lock()
+			events <- AliveCellsCount{*turn, aliveCount(oddWorld)}
+			oddMutex.Unlock()
+		}
+		turnLock.Unlock()
+	}
+}
+func aliveCount(world [][]byte) int {
+	count := 0
+	for _, row := range world {
+		for _, value := range row {
+			if value != 0 {
+				count += 1
+			}
+		}
+	}
+	return count
+}
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
 	c.ioCommand <- ioInput
-	//sends the filename to io
 	c.ioFilename <- filenameInput(p)
-
 	worldEven := recieveworld(c.ioInput, p)
 
 	worldOdd := make([][]byte, p.ImageHeight)
@@ -185,29 +213,42 @@ func distributor(p Params, c distributorChannels) {
 		worldOdd[i] = make([]byte, p.ImageWidth)
 	}
 
+	//controls access to the odd or even matrix
+	var oddMutex = &sync.Mutex{}
+	var EvenMutex = &sync.Mutex{}
+	//controls access to turn
+	var turnLock = &sync.Mutex{}
+
 	turn := 0
+	go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
 	for turn < p.Turns {
+		turnLock.Lock()
 		if turn%2 == 0 {
-			newworld(worldEven, worldOdd, p)
+			newworld(worldEven, worldOdd, p, EvenMutex)
 		} else {
-			newworld(worldOdd, worldEven, p)
+			newworld(worldOdd, worldEven, p, oddMutex)
 		}
 		c.events <- TurnComplete{turn}
 		turn++
+		turnLock.Unlock()
 	}
 	c.ioCommand <- ioOutput
 	c.ioFilename <- filenameOutput(p)
 	if turn%2 != 0 {
 		sendsworld(c.ioOutput, worldOdd)
-		c.events <- FinalTurnComplete{turn, alivecells(worldOdd)}
+		c.events <- FinalTurnComplete{turn, aliveCells(worldOdd)}
 	} else {
 		sendsworld(c.ioOutput, worldEven)
-		c.events <- FinalTurnComplete{turn, alivecells(worldEven)}
+		c.events <- FinalTurnComplete{turn, aliveCells(worldEven)}
 	}
+
+	//deadlock occurs without this line
+	turnLock.Lock()
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 	c.events <- StateChange{turn, Quitting}
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
+
 	close(c.events)
 }
