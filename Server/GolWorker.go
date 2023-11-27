@@ -1,8 +1,19 @@
-package gol
+package Server
 
 import (
+	"flag"
+	"math/rand"
+	"net/rpc"
 	"sync"
+	"time"
 )
+
+type Params struct {
+	Turns       int
+	Threads     int
+	ImageWidth  int
+	ImageHeight int
+}
 
 //GOL logic
 //count3x3 counts how many live cells there are in a 3 x 3 area centered around some x y
@@ -110,4 +121,10 @@ func allTurns(p Params, worldEven, worldOdd [][]byte) {
 	}
 	//deadlock occurs without this line
 	turnLock.Lock()
+}
+func main() {
+	pAddr := flag.String("port", "8030", "port to liston on")
+	flag.Parse()
+	rand.Seed(time.Now().UnixNano())
+	rpc.Register(pAddr)
 }
