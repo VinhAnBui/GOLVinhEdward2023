@@ -1,8 +1,13 @@
 package stubs
 
+var AllTurns = "golWorker.allTurns"
+
 type Response struct {
-	Message [][]byte
+	World [][]byte
 }
 type Request struct {
-	Message [][]byte
+	WorldEven   [][]byte
+	ImageWidth  int
+	ImageHeight int
+	Turns       int
 }

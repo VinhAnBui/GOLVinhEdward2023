@@ -1,10 +1,13 @@
 package gol
 
 import (
+	"flag"
 	"fmt"
+	"net/rpc"
 	"strconv"
 	"sync"
 	"time"
+	"uk.ac.bris.cs/gameoflife/stubs"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
@@ -157,6 +160,13 @@ func waitKeypress(turn *int, worldOdd, worldEven [][]byte, turnLock *sync.Mutex,
 		}
 	}
 }
+func makeCall(client *rpc.Client, worldEven [][]byte, p Params) [][]byte {
+	request := stubs.Request{WorldEven: worldEven, ImageHeight: p.ImageHeight, ImageWidth: p.ImageWidth, Turns: p.Turns}
+	response := new(stubs.Response)
+	client.Call(stubs.AllTurns, request, response)
+	fmt.Println("All turns complete")
+	return worldEven
+}
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
@@ -165,35 +175,30 @@ func distributor(p Params, c distributorChannels) {
 	c.ioFilename <- filenameInput(p)
 	worldEven := recieveworld(c.ioInput, p, c.events)
 
-	worldOdd := make([][]byte, p.ImageHeight)
-	for i := range worldOdd {
-		worldOdd[i] = make([]byte, p.ImageWidth)
-	}
 	//controls access to the odd or even matrix
-	var oddMutex = &sync.Mutex{}
-	var EvenMutex = &sync.Mutex{}
+	//var oddMutex = &sync.Mutex{}
+	//var EvenMutex = &sync.Mutex{}
 	//controls access to turn
 	var turnLock = &sync.Mutex{}
-	turn := 0
-	go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
-	go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
+	//go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
+	//go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
 
+	server := flag.String("server", "127.0.0.1:8030", "IP:port string to connect to as server")
+	flag.Parse()
+	client, _ := rpc.Dial("tcp", *server)
+	defer client.Close()
+	fmt.Println("Called:")
+	world := makeCall(client, worldEven, p)
+
+	turnLock.Lock()
 	c.ioCommand <- ioOutput
 	c.ioFilename <- filenameOutput(p)
-	if turn%2 != 0 {
-		sendsworld(c.ioOutput, worldOdd)
-		c.events <- FinalTurnComplete{turn, aliveCells(worldOdd)}
-	} else {
-		sendsworld(c.ioOutput, worldEven)
-		c.events <- FinalTurnComplete{turn, aliveCells(worldEven)}
-	}
-
-	//deadlock occurs without this line
-	turnLock.Lock()
+	sendsworld(c.ioOutput, world)
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
-	c.events <- StateChange{turn, Quitting}
+	c.events <- FinalTurnComplete{p.Turns, aliveCells(world)}
+	c.events <- StateChange{p.Turns, Quitting}
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
 }
