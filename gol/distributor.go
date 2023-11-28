@@ -191,7 +191,8 @@ func distributor(p Params, c distributorChannels) {
 
 	server := flag.String("server", "127.0.0.1:8031", "IP:port string to connect to as server")
 	flag.Parse()
-	client, _ := rpc.Dial("tcp", *server)
+	client, err := rpc.Dial("tcp", *server)
+	fmt.Println("ERROR IS: ", err)
 	defer func(client *rpc.Client) {
 		err := client.Close()
 		if err != nil {
