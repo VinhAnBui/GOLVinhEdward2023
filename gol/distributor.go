@@ -161,11 +161,17 @@ func waitKeypress(turn *int, worldOdd, worldEven [][]byte, turnLock *sync.Mutex,
 	}
 }
 func makeCall(client *rpc.Client, worldEven [][]byte, p Params) [][]byte {
+	fmt.Println("Called:")
 	request := stubs.Request{WorldEven: worldEven, ImageHeight: p.ImageHeight, ImageWidth: p.ImageWidth, Turns: p.Turns}
 	response := new(stubs.Response)
-	client.Call(stubs.AllTurns, request, response)
+	err := client.Call(stubs.AllTurns, request, response)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	printworld(response.World)
 	fmt.Println("All turns complete")
-	return worldEven
+	return response.World
 }
 
 // distributor divides the work between workers and interacts with other goroutines.
@@ -179,18 +185,22 @@ func distributor(p Params, c distributorChannels) {
 	//var oddMutex = &sync.Mutex{}
 	//var EvenMutex = &sync.Mutex{}
 	//controls access to turn
-	var turnLock = &sync.Mutex{}
+	//var turnLock = &sync.Mutex{}
 	//go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
 	//go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
 
-	server := flag.String("server", "127.0.0.1:8030", "IP:port string to connect to as server")
+	server := flag.String("server", "127.0.0.1:8031", "IP:port string to connect to as server")
 	flag.Parse()
 	client, _ := rpc.Dial("tcp", *server)
-	defer client.Close()
-	fmt.Println("Called:")
+	defer func(client *rpc.Client) {
+		err := client.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(client)
 	world := makeCall(client, worldEven, p)
 
-	turnLock.Lock()
+	//turnLock.Lock()
 	c.ioCommand <- ioOutput
 	c.ioFilename <- filenameOutput(p)
 	sendsworld(c.ioOutput, world)

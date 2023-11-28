@@ -1,6 +1,6 @@
 package stubs
 
-var AllTurns = "golWorker.allTurns"
+var AllTurns = "AllTurns.AllTurns"
 
 type Response struct {
 	World [][]byte

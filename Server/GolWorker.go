@@ -1,8 +1,8 @@
-package Server
+package main
 
 import (
 	"flag"
-	"math/rand"
+	"fmt"
 	"net"
 	"net/rpc"
 	"time"
@@ -35,7 +35,7 @@ func count3x3(grid [][]byte, x, y, height, width int) int {
 //if out of array loops the value back around again
 func edgereset(i int, max int) int {
 	if i < 0 {
-		return (max - 1)
+		return max - 1
 	}
 	if i >= max {
 		return 0
@@ -63,9 +63,11 @@ func stageConverter(startY, endY, startX, endX, height, width int, world, newWor
 	}
 }
 
-type allTurns struct{}
+type AllTurns struct{}
 
-func (t *allTurns) allTurns(req stubs.Request, res *stubs.Response) (err error) {
+func (t *AllTurns) AllTurns(req stubs.Request, res *stubs.Response) (err error) {
+	fmt.Println("aaaaaaaaaaaaaa")
+	fmt.Println(req.Turns)
 	worldEven := req.WorldEven
 	worldOdd := make([][]byte, req.ImageHeight)
 	for i := range worldOdd {
@@ -93,12 +95,33 @@ func (t *allTurns) allTurns(req stubs.Request, res *stubs.Response) (err error) 
 
 	return
 }
+func active() {
+	i := 0
+	for {
+		i++
+		time.Sleep(10 * time.Second)
+		fmt.Println("alive", i)
+	}
+}
 func main() {
-	pAddr := flag.String("port", "8030", "port to liston on")
+	// Parse command-line arguments to get the port
+	pAddr := flag.String("port", "8031", "port to listen on")
 	flag.Parse()
-	rpc.Register(allTurns{})
-	rand.Seed(time.Now().UnixNano())
-	listener, _ := net.Listen("tcp", ":"+*pAddr)
+	fmt.Println(pAddr)
+	// Register the RPC service
+	rpc.Register(&AllTurns{})
+	fmt.Println(pAddr, 2)
+	// Listen for incoming connections on the specified port
+	listener, err := net.Listen("tcp", ":"+*pAddr)
+	fmt.Println(pAddr, 3)
+	if err != nil {
+		// Handle the error and exit or log it
+		fmt.Println("Error listening:", err)
+		return
+	}
+	fmt.Println(pAddr, 4)
 	defer listener.Close()
+	go active()
 	rpc.Accept(listener)
+	fmt.Println(pAddr, 5)
 }
