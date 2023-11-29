@@ -17,12 +17,12 @@ func count3x3(grid [][]byte, x, y, height, width int) int {
 	for xi := -1; xi < 2; xi++ {
 		xi2 := x + xi
 		//fmt.Println("xi:", xi)
-		xi2 = edgereset(xi2, width)
+		xi2 = edgeReset(xi2, width)
 		//fmt.Println("xi2:", xi2)
 		for yi := -1; yi < 2; yi++ {
 			//fmt.Println("yi:", yi)
 			yi2 := yi + y
-			yi2 = edgereset(yi2, height)
+			yi2 = edgeReset(yi2, height)
 			//fmt.Println("yi:", yi2)
 			if grid[yi2][xi2] == 255 {
 				count += 1
@@ -33,7 +33,7 @@ func count3x3(grid [][]byte, x, y, height, width int) int {
 }
 
 //if out of array loops the value back around again
-func edgereset(i int, max int) int {
+func edgeReset(i int, max int) int {
 	if i < 0 {
 		return max - 1
 	}
@@ -44,12 +44,12 @@ func edgereset(i int, max int) int {
 }
 
 //cell value should return the value of a cell given its count
-func cellValue(count int, cellvalue byte) byte {
+func cellValue(count int, cellValue byte) byte {
 	switch count {
 	case 3:
 		return 255
 	case 4:
-		if cellvalue != 0 {
+		if cellValue != 0 {
 			return 255
 		}
 	}
@@ -63,10 +63,39 @@ func stageConverter(startY, endY, startX, endX, height, width int, world, newWor
 	}
 }
 
-type AllTurns struct{}
+type WorkerTurns struct{}
 
-func (t *AllTurns) AllTurns(req stubs.Request, res *stubs.Response) (err error) {
+func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.WorkerResponse) (err error) {
 	fmt.Println("aaaaaaaaaaaaaa")
+	fmt.Println(req.Turns)
+	worldEven := req.WorldEven
+	worldOdd := make([][]byte, req.ImageHeight)
+	for i := range worldOdd {
+		worldOdd[i] = make([]byte, req.ImageWidth)
+	}
+	//var turnLock = &sync.Mutex{}
+	turn := 0
+	for turn < req.Turns {
+		//turnLock.Lock()
+		if turn%2 == 0 {
+			stageConverter(0, req.ImageHeight, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldEven, worldOdd)
+		} else {
+			stageConverter(0, req.ImageHeight, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
+		}
+		turn++
+		//turnLock.Unlock()
+	}
+	//deadlock occurs without this line
+	//turnLock.Lock()
+	if turn%2 == 0 {
+		res.World = worldEven
+	} else {
+		res.World = worldOdd
+	}
+
+	return
+}
+func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.WorkerResponse) (err error) {
 	fmt.Println(req.Turns)
 	worldEven := req.WorldEven
 	worldOdd := make([][]byte, req.ImageHeight)
@@ -109,7 +138,7 @@ func main() {
 	flag.Parse()
 	fmt.Println(pAddr)
 	// Register the RPC service
-	rpc.Register(&AllTurns{})
+	rpc.Register(&WorkerTurns{})
 	fmt.Println(pAddr, 2)
 	// Listen for incoming connections on the specified port
 	listener, err := net.Listen("tcp", ":"+*pAddr)

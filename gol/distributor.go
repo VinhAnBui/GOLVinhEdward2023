@@ -162,8 +162,8 @@ func waitKeypress(turn *int, worldOdd, worldEven [][]byte, turnLock *sync.Mutex,
 }
 func makeCall(client *rpc.Client, worldEven [][]byte, p Params) [][]byte {
 	fmt.Println("Called:")
-	request := stubs.Request{WorldEven: worldEven, ImageHeight: p.ImageHeight, ImageWidth: p.ImageWidth, Turns: p.Turns}
-	response := new(stubs.Response)
+	request := stubs.DistributorRequest{WorldEven: worldEven, ImageHeight: p.ImageHeight, ImageWidth: p.ImageWidth, Turns: p.Turns}
+	response := new(stubs.DistributorResponse)
 	err := client.Call(stubs.AllTurns, request, response)
 	if err != nil {
 		fmt.Println(err)
