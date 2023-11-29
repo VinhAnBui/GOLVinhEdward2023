@@ -187,6 +187,7 @@ func active() {
 }
 func main() {
 	// Parse command-line arguments to get the port
+	pAddr := flag.String("port", "8050", "Port to listen on")
 	brokerAddr := flag.String("broker", "127.0.0.1:8030", "Address of broker instance")
 	flag.Parse()
 	fmt.Println(brokerAddr)
@@ -198,7 +199,7 @@ func main() {
 	rpc.Register(&RowExchange{})
 	fmt.Println(brokerAddr, 2)
 	// Listen for incoming connections on the specified port
-	listener, err := net.Listen("tcp", ":"+*brokerAddr)
+	listener, err := net.Listen("tcp", ":"+*pAddr)
 	fmt.Println(brokerAddr, 3)
 	if err != nil {
 		// Handle the error and exit or log it
