@@ -72,6 +72,11 @@ func main() {
 		fmt.Println("err")
 		return
 	}
+	err = rpc.Register(&AllTurns{})
+	if err != nil {
+		fmt.Println("err")
+		return
+	}
 	listener, _ := net.Listen("tcp", ":"+*pAddr)
 	defer listener.Close()
 	rpc.Accept(listener)
