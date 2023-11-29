@@ -190,7 +190,7 @@ func main() {
 	fmt.Println(brokerAddr)
 	client, _ := rpc.Dial("tcp", *brokerAddr)
 	status := new(stubs.StatusReport)
-	client.Call(stubs.Subscribe, stubs.Subscription{getOutboundIP()}, stubs.StatusReport{})
+	client.Call(stubs.Subscribe, stubs.Subscription{getOutboundIP()}, status)
 	// Register the RPC service
 	rpc.Register(&WorkerTurns{})
 	rpc.Register(&RowExchange{})
