@@ -5,8 +5,17 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
+	"sync"
 	"time"
 	"uk.ac.bris.cs/gameoflife/stubs"
+)
+
+var (
+	topRowIn   [][]byte
+	topRowInmx sync.Mutex
+
+	topRowOut   [][]byte
+	topRowOutmx sync.Mutex
 )
 
 //GOL logic
@@ -63,6 +72,18 @@ func stageConverter(startY, endY, startX, endX, height, width int, world, newWor
 	}
 }
 
+func callRowExchange(row []byte, client *rpc.Client) []byte {
+	req := stubs.RowSwap{}
+	req.Row = row
+	res := stubs.RowSwap{}
+	err := client.Call(stubs.RowExchange, req, res)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return res.Row
+}
+
 type WorkerTurns struct{}
 
 func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.WorkerResponse) (err error) {
@@ -92,10 +113,10 @@ func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.Work
 	} else {
 		res.World = worldOdd
 	}
-
 	return
 }
 func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.WorkerResponse) (err error) {
+	topRowOutmx.Lock()
 	fmt.Println(req.Turns)
 	worldEven := req.WorldEven
 	worldOdd := make([][]byte, req.ImageHeight)
@@ -107,12 +128,25 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 	for turn < req.Turns {
 		//turnLock.Lock()
 		if turn%2 == 0 {
-			stageConverter(0, req.ImageHeight, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldEven, worldOdd)
+			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldEven, worldOdd)
+			topRowOutmx.Unlock()
+			worldOdd[req.ImageHeight-1] = callRowExchange(worldOdd[1], req.Client)
+			topRowInmx.Lock()
+			worldOdd[0] = topRowIn[0]
+			topRowIn = topRowIn[1:]
+			topRowInmx.Unlock()
 		} else {
-			stageConverter(0, req.ImageHeight, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
+			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
+			topRowOutmx.Unlock()
+			worldOdd[req.ImageHeight-1] = callRowExchange(worldEven[1], req.Client) //exchanges bottom row
+			topRowInmx.Lock()
+			worldOdd[0] = topRowIn[0] //exchanges top row
+			topRowIn = topRowIn[1:]
+			topRowInmx.Unlock()
 		}
+
 		turn++
-		//turnLock.Unlock()
+		topRowOutmx.Lock()
 	}
 	//deadlock occurs without this line
 	//turnLock.Lock()
@@ -122,6 +156,19 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 		res.World = worldOdd
 	}
 
+	return
+}
+
+type RowExchange struct{}
+
+func (t *RowExchange) rowExchange(req stubs.RowSwap, res *stubs.RowSwap) (err error) {
+	topRowInmx.Lock()
+	topRowIn = append(topRowIn, req.Row)
+	topRowInmx.Unlock()
+	topRowOutmx.Lock()
+	res.Row = topRowOut[0]
+	topRowOut = topRowOut[1:]
+	topRowOutmx.Unlock()
 	return
 }
 func active() {
@@ -139,6 +186,7 @@ func main() {
 	fmt.Println(pAddr)
 	// Register the RPC service
 	rpc.Register(&WorkerTurns{})
+	rpc.Register(&RowExchange{})
 	fmt.Println(pAddr, 2)
 	// Listen for incoming connections on the specified port
 	listener, err := net.Listen("tcp", ":"+*pAddr)

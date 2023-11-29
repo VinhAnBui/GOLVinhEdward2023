@@ -5,6 +5,7 @@ import "net/rpc"
 var AllTurns = "Broker.AllTurns"
 var WorkerTurns = "WorkerTurns.WorkerTurnsSingle"
 var WorkersTurns = "WorkerTurns.WorkerTurnsPlural"
+var RowExchange = "RowExchange.RowExchange"
 
 //Broker and Distributor stubs
 type DistributorResponse struct {
@@ -22,7 +23,7 @@ type WorkerResponse struct {
 	World [][]byte
 }
 type WorkerRequest struct {
-	client      *rpc.Client
+	Client      *rpc.Client
 	WorldEven   [][]byte
 	ImageWidth  int
 	ImageHeight int

@@ -42,7 +42,6 @@ func pluralCall(req stubs.DistributorRequest) [][]byte {
 }
 
 type Broker struct{}
-type AllTurns struct{}
 
 func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err error) {
 	err = subscribe(req.FactoryAddress)
@@ -51,6 +50,8 @@ func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err
 	}
 	return err
 }
+
+type AllTurns struct{}
 
 func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.DistributorResponse) (err error) {
 	fmt.Println(req.Turns)
