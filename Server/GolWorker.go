@@ -16,6 +16,8 @@ var (
 
 	topRowOut   [][]byte
 	topRowOutmx sync.Mutex
+
+	turnLock sync.Mutex
 )
 
 //GOL logic
@@ -104,17 +106,17 @@ func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.Work
 	//var turnLock = &sync.Mutex{}
 	turn := 0
 	for turn < req.Turns {
-		//turnLock.Lock()
+		turnLock.Lock()
 		if turn%2 == 0 {
 			stageConverter(0, req.ImageHeight, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldEven, worldOdd)
 		} else {
 			stageConverter(0, req.ImageHeight, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
 		}
 		turn++
-		//turnLock.Unlock()
+		turnLock.Unlock()
 	}
 	//deadlock occurs without this line
-	//turnLock.Lock()
+	turnLock.Lock()
 	if turn%2 == 0 {
 		res.World = worldEven
 	} else {
