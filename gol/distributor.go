@@ -18,6 +18,15 @@ type distributorChannels struct {
 	ioInput    <-chan uint8
 }
 
+type cell struct {
+	x int
+	y int
+}
+type cellResult struct {
+	cell    cell
+	isAlive bool
+}
+
 //generates the filename for inputting
 func filenameInput(p Params) string {
 	s := strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth)
@@ -64,111 +73,145 @@ func sendWorld(ioOutput chan<- uint8, world [][]byte) {
 
 //GOL logic
 
-func numAdjacentLiving(world [][]byte, x int, y int, imageWidth int, imageHeight int) int {
-	var numAdjacentLiving = 0
-	if (x > imageWidth) || (y > imageHeight) || (0 > x) || (0 > y) {
-		panic("Co-ordinates out of range!")
-	}
-	var cellToLeftX, cellToRightX, cellAboveY, cellBelowY int
+func cellResultWorker(world [][]byte, cells chan cell, imageWidth int, imageHeight int,
+	cellResults chan cellResult, events chan<- Event, turn int, done chan bool, wg *sync.WaitGroup, newWorldStartTime time.Time) {
 
-	//get cells next to target cell, wrapping around if necessary
-	if x == 0 {
-		cellToLeftX = imageWidth - 1
-	} else {
-		cellToLeftX = x - 1
-	}
-	if x == imageWidth-1 {
-		cellToRightX = 0
-	} else {
-		cellToRightX = x + 1
-	}
-	if y == 0 {
-		cellBelowY = imageHeight - 1
-	} else {
-		cellBelowY = y - 1
-	}
-	if y == imageHeight-1 {
-		cellAboveY = 0
-	} else {
-		cellAboveY = y + 1
-	}
+	var cellsProcessedTracker = 0 //remove after debugging
 
-	//increment numAdjacentLiving for each adjacent living cell
-	if world[cellToLeftX][y] == 255 {
-		numAdjacentLiving++
-	}
-	if world[cellToLeftX][cellAboveY] == 255 {
-		numAdjacentLiving++
-	}
-	if world[x][cellAboveY] == 255 {
-		numAdjacentLiving++
-	}
-	if world[cellToRightX][cellAboveY] == 255 {
-		numAdjacentLiving++
-	}
-	if world[cellToRightX][y] == 255 {
-		numAdjacentLiving++
-	}
-	if world[cellToRightX][cellBelowY] == 255 {
-		numAdjacentLiving++
-	}
-	if world[x][cellBelowY] == 255 {
-		numAdjacentLiving++
-	}
-	if world[cellToLeftX][cellBelowY] == 255 {
-		numAdjacentLiving++
-	}
+	for {
+		select {
+		case currentCell := <-cells:
 
-	return numAdjacentLiving
-}
+			var cellToLeftX, cellToRightX, cellAboveY, cellBelowY int
+			numAdjacentLiving := 0
+			if currentCell.x == 0 {
+				cellToLeftX = imageWidth - 1
+			} else {
+				cellToLeftX = currentCell.x - 1
+			}
 
-func partWorld(turn, startY, endY, startX, endX int, world, newWorld [][]byte, params Params, group *sync.WaitGroup, events chan<- Event) {
-	stageConverter(turn, startY, endY, startX, endX, world, newWorld, params, events)
-	group.Done()
-}
-func stageConverter(turn, startY, endY, startX, endX int, world, newWorld [][]byte, params Params, events chan<- Event) {
+			if currentCell.x == imageWidth-1 {
+				cellToRightX = 0
+			} else {
+				cellToRightX = currentCell.x + 1
+			}
 
-	for y := startY; y < endY; y++ {
-		for x := startX; x < endX; x++ {
-			var numAdjacentLiving = numAdjacentLiving(world, x, y, params.ImageWidth, params.ImageHeight)
+			if currentCell.y == 0 {
+				cellBelowY = imageHeight - 1
+			} else {
+				cellBelowY = currentCell.y - 1
+			}
+
+			if currentCell.y == imageHeight-1 {
+				cellAboveY = 0
+			} else {
+				cellAboveY = currentCell.y + 1
+			}
+
+			if world[cellToLeftX][currentCell.y] == 255 {
+				numAdjacentLiving++
+			}
+			if world[cellToLeftX][cellAboveY] == 255 {
+				numAdjacentLiving++
+			}
+			if world[currentCell.x][cellAboveY] == 255 {
+				numAdjacentLiving++
+			}
+			if world[cellToRightX][cellAboveY] == 255 {
+				numAdjacentLiving++
+			}
+			if world[cellToRightX][currentCell.y] == 255 {
+				numAdjacentLiving++
+			}
+			if world[cellToRightX][cellBelowY] == 255 {
+				numAdjacentLiving++
+			}
+			if world[currentCell.x][cellBelowY] == 255 {
+				numAdjacentLiving++
+			}
+			if world[cellToLeftX][cellBelowY] == 255 {
+				numAdjacentLiving++
+			}
+
 			switch {
-			case ((numAdjacentLiving < 2) || (numAdjacentLiving > 3)) && (world[x][y] == 255):
+			case ((numAdjacentLiving < 2) || (numAdjacentLiving > 3)) && world[currentCell.x][currentCell.y] == 255:
 
-				newWorld[x][y] = 0
-			case (numAdjacentLiving == 3) && (world[x][y] == 0):
-				newWorld[x][y] = 255
+				cellResults <- cellResult{cell: currentCell, isAlive: false}
+				events <- CellFlipped{turn, util.Cell{X: currentCell.x, Y: currentCell.y}}
+
+			case (numAdjacentLiving == 3) && !(world[currentCell.x][currentCell.y] == 255):
+				cellResults <- cellResult{cell: currentCell, isAlive: true}
+				events <- CellFlipped{turn, util.Cell{X: currentCell.x, Y: currentCell.y}}
 			default:
-				newWorld[x][y] = world[x][y]
+				cellResults <- cellResult{cell: currentCell, isAlive: world[currentCell.x][currentCell.y] == 255}
 			}
-			if newWorld[y][x] != world[y][x] {
-				events <- CellFlipped{turn, util.Cell{X: x, Y: y}}
+			cellsProcessedTracker++
+		case <-done:
+			wg.Done()
+			return
+		}
+	}
+
+}
+
+func newWorld(turn int, world [][]byte, p Params, events chan<- Event) [][]byte {
+
+	start := time.Now()
+	var wg sync.WaitGroup
+
+	//queue for cellResults as output by workers
+	cellResults := make(chan cellResult)
+
+	//queue for cells that need to be solved
+	cellQueue := make(chan cell)
+
+	//contents of the channel doesn't matter - sending a value to it stops worker routines
+	killSignal := make(chan bool)
+
+	nextWorld := make([][]byte, p.ImageHeight)
+	for i := range nextWorld {
+		nextWorld[i] = make([]byte, p.ImageWidth)
+	}
+
+	go func() {
+		var taskCount = 0
+		for n := 0; n < len(world)*len(world[0]); n++ {
+			i := <-cellResults
+
+			if i.isAlive {
+				nextWorld[i.cell.x][i.cell.y] = 255
+			} else {
+				nextWorld[i.cell.x][i.cell.y] = 0
 			}
+			taskCount++
+
+		}
+		close(killSignal)
+
+	}()
+	//create workers equal to the number of threads
+	for i := 0; i < p.Threads; i++ {
+		wg.Add(1)
+		go cellResultWorker(world, cellQueue, p.ImageWidth, p.ImageHeight, cellResults, events, turn, killSignal, &wg, start)
+
+	}
+
+	for x := 0; x < p.ImageWidth; x++ {
+		for y := 0; y < p.ImageWidth; y++ {
+			go func(x, y int) {
+				cellQueue <- cell{x: x, y: y}
+			}(x, y)
 
 		}
 	}
-}
-func newWorld(turn int, world, newWorld [][]byte, p Params, mutex *sync.Mutex, events chan<- Event) {
-	mutex.Lock()
-	if p.Threads == 1 {
-		stageConverter(turn, 0, p.ImageHeight, 0, p.ImageWidth, world, newWorld, p, events)
-	} else {
-		var wg sync.WaitGroup
-		heightSplit := p.ImageHeight / p.Threads
-		if p.ImageHeight%p.Threads != 0 {
-			heightSplit += 1
-		}
-		for i := 0; i < p.Threads; i++ {
-			wg.Add(1)
-			startY := heightSplit * i
-			endY := heightSplit * (i + 1)
-			if endY > p.ImageHeight {
-				endY = p.ImageHeight
-			}
-			go partWorld(turn, startY, endY, 0, p.ImageWidth, world, newWorld, p, &wg, events)
-		}
-		wg.Wait()
-	}
-	mutex.Unlock()
+
+	wg.Wait()
+	return nextWorld
+
+	//For each available thread, start a goroutine to first calculate the orthogonal adjacent cells
+	//to a certain co-ordinate, then get the number of adjacent living ones, then return a slice like
+	// [x, y, alive/dead]
+	//read from that channel and set cells in newWorld according to results from it.
 }
 
 /*
@@ -200,19 +243,11 @@ func aliveCells(world [][]byte) []util.Cell {
 	}
 	return aliveCells
 }
-func every2Seconds(oddWorld, evenWorld [][]byte, turn *int, oddMutex, evenMutex, turnLock *sync.Mutex, events chan<- Event) {
+func updateAliveCellsCount(world [][]byte, turn *int, turnLock *sync.Mutex, events chan<- Event) {
 	for {
 		time.Sleep(2 * time.Second)
 		turnLock.Lock()
-		if *turn%2 == 0 {
-			evenMutex.Lock()
-			events <- AliveCellsCount{*turn, aliveCount(evenWorld)}
-			evenMutex.Unlock()
-		} else {
-			oddMutex.Lock()
-			events <- AliveCellsCount{*turn, aliveCount(oddWorld)}
-			oddMutex.Unlock()
-		}
+		events <- AliveCellsCount{*turn, aliveCount(world)}
 		turnLock.Unlock()
 	}
 }
@@ -227,7 +262,7 @@ func aliveCount(world [][]byte) int {
 	}
 	return count
 }
-func waitKeypress(turn *int, worldOdd, worldEven [][]byte, turnLock *sync.Mutex, c distributorChannels, p Params) {
+func waitKeypress(turn *int, world [][]byte, turnLock *sync.Mutex, c distributorChannels, p Params) {
 	for {
 		select {
 		// Block and wait for requests from the distributor
@@ -237,21 +272,13 @@ func waitKeypress(turn *int, worldOdd, worldEven [][]byte, turnLock *sync.Mutex,
 			case 's':
 				c.ioCommand <- ioOutput
 				c.ioFilename <- strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(*turn)
-				if *turn%2 == 0 {
-					sendWorld(c.ioOutput, worldEven)
-				} else {
-					sendWorld(c.ioOutput, worldOdd)
-				}
+				sendWorld(c.ioOutput, world)
 				c.ioCommand <- ioCheckIdle
 				<-c.ioIdle
 			case 'q':
 				c.ioCommand <- ioOutput
 				c.ioFilename <- strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(p.ImageWidth) + "x" + strconv.Itoa(*turn)
-				if *turn%2 == 0 {
-					sendWorld(c.ioOutput, worldEven)
-				} else {
-					sendWorld(c.ioOutput, worldOdd)
-				}
+				sendWorld(c.ioOutput, world)
 				c.ioCommand <- ioCheckIdle
 				<-c.ioIdle
 				c.events <- StateChange{*turn, Quitting}
@@ -271,27 +298,19 @@ func distributor(p Params, c distributorChannels) {
 
 	c.ioCommand <- ioInput
 	c.ioFilename <- filenameInput(p)
-	worldEven := receiveWorld(c.ioInput, p, c.events)
 
-	worldOdd := make([][]byte, p.ImageHeight)
-	for i := range worldOdd {
-		worldOdd[i] = make([]byte, p.ImageWidth)
-	}
-	//controls access to the odd or even matrix
-	var oddMutex = &sync.Mutex{}
-	var EvenMutex = &sync.Mutex{}
+	world := receiveWorld(c.ioInput, p, c.events)
+
 	//controls access to turn
 	var turnLock = &sync.Mutex{}
 	turn := 0
-	go every2Seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
-	go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
+	go updateAliveCellsCount(world, &turn, turnLock, c.events)
+	go waitKeypress(&turn, world, turnLock, c, p)
+
 	for turn < p.Turns {
 		turnLock.Lock()
-		if turn%2 == 0 {
-			newWorld(turn, worldEven, worldOdd, p, EvenMutex, c.events)
-		} else {
-			newWorld(turn, worldOdd, worldEven, p, oddMutex, c.events)
-		}
+		world = newWorld(turn, world, p, c.events)
+
 		c.events <- TurnComplete{turn}
 		turn++
 		turnLock.Unlock()
@@ -299,13 +318,9 @@ func distributor(p Params, c distributorChannels) {
 
 	c.ioCommand <- ioOutput
 	c.ioFilename <- filenameOutput(p)
-	if turn%2 != 0 {
-		sendWorld(c.ioOutput, worldOdd)
-		c.events <- FinalTurnComplete{turn, aliveCells(worldOdd)}
-	} else {
-		sendWorld(c.ioOutput, worldEven)
-		c.events <- FinalTurnComplete{turn, aliveCells(worldEven)}
-	}
+
+	sendWorld(c.ioOutput, world)
+	c.events <- FinalTurnComplete{turn, aliveCells(world)}
 
 	//deadlock occurs without this line
 	turnLock.Lock()
