@@ -1,6 +1,7 @@
 package gol
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"sync"
@@ -74,10 +75,7 @@ func sendWorld(ioOutput chan<- uint8, world [][]byte) {
 //GOL logic
 
 func cellResultWorker(world [][]byte, cells chan cell, imageWidth int, imageHeight int,
-	cellResults chan cellResult, events chan<- Event, turn int, done chan bool, wg *sync.WaitGroup, newWorldStartTime time.Time) {
-
-	var cellsProcessedTracker = 0 //remove after debugging
-
+	cellResults chan cellResult, events chan<- Event, turn int, done chan bool, wg *sync.WaitGroup) {
 	for {
 		select {
 		case currentCell := <-cells:
@@ -108,30 +106,9 @@ func cellResultWorker(world [][]byte, cells chan cell, imageWidth int, imageHeig
 				cellAboveY = currentCell.y + 1
 			}
 
-			if world[cellToLeftX][currentCell.y] == 255 {
-				numAdjacentLiving++
-			}
-			if world[cellToLeftX][cellAboveY] == 255 {
-				numAdjacentLiving++
-			}
-			if world[currentCell.x][cellAboveY] == 255 {
-				numAdjacentLiving++
-			}
-			if world[cellToRightX][cellAboveY] == 255 {
-				numAdjacentLiving++
-			}
-			if world[cellToRightX][currentCell.y] == 255 {
-				numAdjacentLiving++
-			}
-			if world[cellToRightX][cellBelowY] == 255 {
-				numAdjacentLiving++
-			}
-			if world[currentCell.x][cellBelowY] == 255 {
-				numAdjacentLiving++
-			}
-			if world[cellToLeftX][cellBelowY] == 255 {
-				numAdjacentLiving++
-			}
+			numAdjacentLiving = bytes.Count([]byte{world[cellToLeftX][currentCell.y], world[cellToLeftX][cellAboveY],
+				world[currentCell.x][cellAboveY], world[cellToRightX][cellAboveY], world[cellToRightX][currentCell.y],
+				world[cellToRightX][cellBelowY], world[currentCell.x][cellBelowY], world[cellToLeftX][cellBelowY]}, []byte{255})
 
 			switch {
 			case ((numAdjacentLiving < 2) || (numAdjacentLiving > 3)) && world[currentCell.x][currentCell.y] == 255:
@@ -145,7 +122,6 @@ func cellResultWorker(world [][]byte, cells chan cell, imageWidth int, imageHeig
 			default:
 				cellResults <- cellResult{cell: currentCell, isAlive: world[currentCell.x][currentCell.y] == 255}
 			}
-			cellsProcessedTracker++
 		case <-done:
 			wg.Done()
 			return
@@ -156,7 +132,6 @@ func cellResultWorker(world [][]byte, cells chan cell, imageWidth int, imageHeig
 
 func newWorld(turn int, world [][]byte, p Params, events chan<- Event) [][]byte {
 
-	start := time.Now()
 	var wg sync.WaitGroup
 
 	//queue for cellResults as output by workers
@@ -173,6 +148,7 @@ func newWorld(turn int, world [][]byte, p Params, events chan<- Event) [][]byte 
 		nextWorld[i] = make([]byte, p.ImageWidth)
 	}
 
+	//put outputs from cellResults channel into nextWorld
 	go func() {
 		var taskCount = 0
 		for n := 0; n < len(world)*len(world[0]); n++ {
@@ -189,10 +165,11 @@ func newWorld(turn int, world [][]byte, p Params, events chan<- Event) [][]byte 
 		close(killSignal)
 
 	}()
+
 	//create workers equal to the number of threads
 	for i := 0; i < p.Threads; i++ {
 		wg.Add(1)
-		go cellResultWorker(world, cellQueue, p.ImageWidth, p.ImageHeight, cellResults, events, turn, killSignal, &wg, start)
+		go cellResultWorker(world, cellQueue, p.ImageWidth, p.ImageHeight, cellResults, events, turn, killSignal, &wg)
 
 	}
 
@@ -208,29 +185,8 @@ func newWorld(turn int, world [][]byte, p Params, events chan<- Event) [][]byte 
 	wg.Wait()
 	return nextWorld
 
-	//For each available thread, start a goroutine to first calculate the orthogonal adjacent cells
-	//to a certain co-ordinate, then get the number of adjacent living ones, then return a slice like
-	// [x, y, alive/dead]
-	//read from that channel and set cells in newWorld according to results from it.
 }
 
-/*
-//useful for debugging reasons
-func printWorld(world [][]byte) {
-	for _, v := range world {
-		var b []byte
-		for _, v2 := range v {
-			if v2 == 255 {
-				b = append(b, 1)
-			} else {
-				b = append(b, v2)
-			}
-		}
-		fmt.Println(b)
-	}
-	println("")
-}
-*/
 func aliveCells(world [][]byte) []util.Cell {
 
 	var aliveCells []util.Cell
