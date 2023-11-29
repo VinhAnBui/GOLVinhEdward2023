@@ -60,8 +60,6 @@ func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.Distributor
 	}
 	if len(workerList) == 1 {
 		singleCall(workerList[0], req)
-	} else {
-		pluralCall(req)
 	}
 	return
 }

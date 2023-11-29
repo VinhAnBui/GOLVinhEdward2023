@@ -6,6 +6,7 @@ var AllTurns = "Broker.AllTurns"
 var WorkerTurns = "WorkerTurns.WorkerTurnsSingle"
 var WorkersTurns = "WorkerTurns.WorkerTurnsPlural"
 var RowExchange = "RowExchange.RowExchange"
+var Subscribe = "Broker.Subscribe"
 
 //Broker and Distributor stubs
 type DistributorResponse struct {

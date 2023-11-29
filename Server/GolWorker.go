@@ -72,6 +72,7 @@ func stageConverter(startY, endY, startX, endX, height, width int, world, newWor
 	}
 }
 
+//rpc stuff
 func callRowExchange(row []byte, client *rpc.Client) []byte {
 	req := stubs.RowSwap{}
 	req.Row = row
@@ -82,6 +83,12 @@ func callRowExchange(row []byte, client *rpc.Client) []byte {
 		return nil
 	}
 	return res.Row
+}
+func getOutboundIP() string {
+	conn, _ := net.Dial("udp", "8.8.8.8:80")
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr).IP.String()
+	return localAddr
 }
 
 type WorkerTurns struct{}
@@ -133,18 +140,15 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 			worldOdd[req.ImageHeight-1] = callRowExchange(worldOdd[1], req.Client)
 			topRowInmx.Lock()
 			worldOdd[0] = topRowIn[0]
-			topRowIn = topRowIn[1:]
-			topRowInmx.Unlock()
 		} else {
 			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
 			topRowOutmx.Unlock()
 			worldOdd[req.ImageHeight-1] = callRowExchange(worldEven[1], req.Client) //exchanges bottom row
 			topRowInmx.Lock()
 			worldOdd[0] = topRowIn[0] //exchanges top row
-			topRowIn = topRowIn[1:]
-			topRowInmx.Unlock()
 		}
-
+		topRowIn = topRowIn[1:]
+		topRowInmx.Unlock()
 		turn++
 		topRowOutmx.Lock()
 	}
@@ -181,24 +185,26 @@ func active() {
 }
 func main() {
 	// Parse command-line arguments to get the port
-	pAddr := flag.String("port", "8031", "port to listen on")
+	brokerAddr := flag.String("broker", "127.0.0.1:8030", "Address of broker instance")
 	flag.Parse()
-	fmt.Println(pAddr)
+	fmt.Println(brokerAddr)
+	client, _ := rpc.Dial("tcp", *brokerAddr)
+	status := new(stubs.StatusReport)
+	client.Call(stubs.Subscribe, stubs.Subscription{getOutboundIP()}, stubs.StatusReport{})
 	// Register the RPC service
 	rpc.Register(&WorkerTurns{})
 	rpc.Register(&RowExchange{})
-	fmt.Println(pAddr, 2)
+	fmt.Println(brokerAddr, 2)
 	// Listen for incoming connections on the specified port
-	listener, err := net.Listen("tcp", ":"+*pAddr)
-	fmt.Println(pAddr, 3)
+	listener, err := net.Listen("tcp", ":"+*brokerAddr)
+	fmt.Println(brokerAddr, 3)
 	if err != nil {
 		// Handle the error and exit or log it
 		fmt.Println("Error listening:", err)
 		return
 	}
-	fmt.Println(pAddr, 4)
+	fmt.Println(brokerAddr, 4)
 	defer listener.Close()
 	go active()
 	rpc.Accept(listener)
-	fmt.Println(pAddr, 5)
 }
