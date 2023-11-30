@@ -6,11 +6,24 @@ import (
 	"fmt"
 	"net"
 	"net/rpc"
+	"sync"
+	"time"
 	"uk.ac.bris.cs/gameoflife/stubs"
 )
 
-var workerList []*rpc.Client
+var (
+	workerList   []*rpc.Client
+	workerListmx sync.RWMutex
+)
 
+func active() {
+	i := 0
+	for {
+		i++
+		time.Sleep(10 * time.Second)
+		fmt.Println(i, "workers:", len(workerList))
+	}
+}
 func subscribe(factoryAddress string) (err error) {
 	fmt.Println("Subscription request")
 	client, err := rpc.Dial("tcp", factoryAddress)
@@ -86,10 +99,12 @@ func pluralCall(req stubs.WorkerRequest, rtrn chan [][]uint8, client *rpc.Client
 type Broker struct{}
 
 func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err error) {
+	workerListmx.Lock()
 	err = subscribe(req.FactoryAddress)
 	if err != nil {
 		res.Message = "Error during subscription"
 	}
+	workerListmx.Unlock()
 	return err
 }
 
@@ -97,16 +112,22 @@ type AllTurns struct{}
 
 func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.DistributorResponse) (err error) {
 	fmt.Println(req.Turns)
+	workerListmx.Lock()
+
 	if len(workerList) <= 0 {
 		return errors.New("No Workers")
 	}
 	if len(workerList) == 1 {
-		singleCall(workerList[0], req)
+		res.World = singleCall(workerList[0], req)
 	}
+	if len(workerList) > 1 {
+		res.World = pluralCalls(req)
+	}
+	workerListmx.Unlock()
 	return
 }
 func main() {
-	pAddr := flag.String("port", "8030", "Port to listen on")
+	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
 	err := rpc.Register(&Broker{})
 	if err != nil {
@@ -119,6 +140,12 @@ func main() {
 		return
 	}
 	listener, _ := net.Listen("tcp", ":"+*pAddr)
-	defer listener.Close()
+	go active()
+	defer func(listener net.Listener) {
+		err := listener.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(listener)
 	rpc.Accept(listener)
 }
