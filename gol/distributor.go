@@ -106,7 +106,6 @@ func newworld(world [][]byte, p Params) [][]byte {
 			newWorld[y][x] = cellValue(count3x3(world, x, y, p), world[y][x])
 		}
 	}
-	printworld(newWorld)
 	return newWorld
 }
 
@@ -141,17 +140,15 @@ func alivecells(world [][]byte) []util.Cell {
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
-	fmt.Println("1")
 	c.ioCommand <- ioInput
 	//sends the filename to io
 	c.ioFilename <- generateFile(p)
-	fmt.Println("2")
+
 	world := recieveworld(c.ioInput, p)
-	printworld(world)
 	turn := 0
 	for turn < p.Turns {
 		turn = turn + 1
-		println("turn:", turn)
+
 		world = newworld(world, p)
 	}
 	c.events <- FinalTurnComplete{turn, alivecells(world)}
