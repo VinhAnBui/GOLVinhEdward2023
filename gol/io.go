@@ -138,6 +138,7 @@ func startIo(p Params, c ioChannels) {
 		case command := <-io.channels.command:
 			switch command {
 			case ioInput:
+				fmt.Println("ioInput")
 				io.readPgmImage()
 			case ioOutput:
 				io.writePgmImage()
