@@ -111,44 +111,49 @@ func cellValue(count int, cellvalue byte) byte {
 	}
 	return 0
 }
-func partWorld(turn, startY, endY, startX, endX int, world, newWorld [][]byte, params Params, group *sync.WaitGroup, events chan<- Event) {
-	stageConverter(turn, startY, endY, startX, endX, world, newWorld, params, events)
-	group.Done()
+func partWorld(startY, endY, startX, endX int, world [][]byte, p Params, rtrn chan [][]byte) {
+	rtrn <- stageConverter(startY, endY, startX, endX, world, p)
 }
-func stageConverter(turn, startY, endY, startX, endX int, world, newWorld [][]byte, params Params, events chan<- Event) {
 
+func stageConverter(startY, endY, startX, endX int, world [][]byte, p Params) [][]byte {
+	newPixelData := make([][]uint8, p.ImageHeight)
+	for i := range newPixelData {
+		newPixelData[i] = make([]uint8, p.ImageWidth)
+	}
 	for y := startY; y < endY; y++ {
 		for x := startX; x < endX; x++ {
-			newWorld[y][x] = cellValue(count3x3(world, x, y, params), world[y][x])
-			if newWorld[y][x] != world[y][x] {
-				events <- CellFlipped{turn, util.Cell{x, y}}
-			}
-
+			newPixelData[y][x] = cellValue(count3x3(world, x, y, p), world[y][x])
 		}
 	}
+	return newPixelData
 }
-func newworld(turn int, world, newWorld [][]byte, p Params, mutex *sync.Mutex, events chan<- Event) {
-	mutex.Lock()
+func newworld(world [][]byte, p Params) [][]uint8 {
+	var newPixelData [][]uint8
 	if p.Threads == 1 {
-		stageConverter(turn, 0, p.ImageHeight, 0, p.ImageWidth, world, newWorld, p, events)
+		return stageConverter(0, p.ImageHeight, 0, p.ImageWidth, world, p)
 	} else {
-		var wg sync.WaitGroup
 		heightsplit := p.ImageHeight / p.Threads
 		if p.ImageHeight%p.Threads != 0 {
 			heightsplit += 1
 		}
+		out := make([]chan [][]uint8, p.Threads)
+		for i := range out {
+			out[i] = make(chan [][]uint8)
+		}
 		for i := 0; i < p.Threads; i++ {
-			wg.Add(1)
 			startY := heightsplit * i
 			endY := heightsplit * (i + 1)
 			if endY > p.ImageHeight {
 				endY = p.ImageHeight
 			}
-			go partWorld(turn, startY, endY, 0, p.ImageWidth, world, newWorld, p, &wg, events)
+			go partWorld(startY, endY, 0, p.ImageWidth, world, p, out[i])
 		}
-		wg.Wait()
+		for i := 0; i < p.Threads; i++ {
+			part := <-out[i]
+			newPixelData = append(newPixelData, part...)
+		}
 	}
-	mutex.Unlock()
+	return newPixelData
 }
 
 //useful for debugging reasons
@@ -256,23 +261,23 @@ func distributor(p Params, c distributorChannels) {
 		worldOdd[i] = make([]byte, p.ImageWidth)
 	}
 	//controls access to the odd or even matrix
-	var oddMutex = &sync.Mutex{}
-	var EvenMutex = &sync.Mutex{}
+	//var oddMutex = &sync.Mutex{}
+	//var EvenMutex = &sync.Mutex{}
 	//controls access to turn
-	var turnLock = &sync.Mutex{}
+	//var turnLock = &sync.Mutex{}
 	turn := 0
-	go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
-	go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
+	//go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
+	//go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
 	for turn < p.Turns {
-		turnLock.Lock()
+		//turnLock.Lock()
 		if turn%2 == 0 {
-			newworld(turn, worldEven, worldOdd, p, EvenMutex, c.events)
+			worldOdd = newworld(worldEven, p)
 		} else {
-			newworld(turn, worldOdd, worldEven, p, oddMutex, c.events)
+			worldEven = newworld(worldOdd, p)
 		}
 		c.events <- TurnComplete{turn}
 		turn++
-		turnLock.Unlock()
+		//turnLock.Unlock()
 	}
 
 	c.ioCommand <- ioOutput
@@ -286,7 +291,7 @@ func distributor(p Params, c distributorChannels) {
 	}
 
 	//deadlock occurs without this line
-	turnLock.Lock()
+	//turnLock.Lock()
 	// Make sure that the Io has finished any output before exiting.
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
