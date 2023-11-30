@@ -18,6 +18,7 @@ var (
 	topRowOutmx sync.Mutex
 
 	turnLock sync.Mutex
+	ch       chan int
 )
 
 //GOL logic
@@ -167,7 +168,7 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 
 type RowExchange struct{}
 
-func (t *RowExchange) rowExchange(req stubs.RowSwap, res *stubs.RowSwap) (err error) {
+func (t *RowExchange) RowExchange(req stubs.RowSwap, res *stubs.RowSwap) (err error) {
 	topRowInmx.Lock()
 	topRowIn = append(topRowIn, req.Row)
 	topRowInmx.Unlock()
@@ -182,32 +183,44 @@ func active() {
 	for {
 		i++
 		time.Sleep(10 * time.Second)
-		fmt.Println("alive", i)
+		fmt.Println(i, "workers:")
 	}
 }
 func main() {
 	// Parse command-line arguments to get the port
-	pAddr := flag.String("port", "8050", "Port to listen on")
-	brokerAddr := flag.String("broker", "127.0.0.1:8030", "Address of broker instance")
+	brokerAddr := flag.String("broker", "127.0.0.1:8031", "Address of broker instance")
+	pAddr := flag.String("port", "8051", "Port to listen on")
 	flag.Parse()
 	fmt.Println(brokerAddr)
 	client, _ := rpc.Dial("tcp", *brokerAddr)
 	status := new(stubs.StatusReport)
-	client.Call(stubs.Subscribe, stubs.Subscription{getOutboundIP()}, status)
+	//registers itself as a worker to broker
+	err := client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
+	if err != nil {
+		fmt.Println(err)
+	}
 	// Register the RPC service
-	rpc.Register(&WorkerTurns{})
-	rpc.Register(&RowExchange{})
-	fmt.Println(brokerAddr, 2)
+	err = rpc.Register(&WorkerTurns{})
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = rpc.Register(&RowExchange{})
+	if err != nil {
+		fmt.Println(err)
+	}
 	// Listen for incoming connections on the specified port
 	listener, err := net.Listen("tcp", ":"+*pAddr)
-	fmt.Println(brokerAddr, 3)
 	if err != nil {
 		// Handle the error and exit or log it
 		fmt.Println("Error listening:", err)
 		return
 	}
-	fmt.Println(brokerAddr, 4)
-	defer listener.Close()
+	defer func(listener net.Listener) {
+		err := listener.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(listener)
 	go active()
 	rpc.Accept(listener)
 }
