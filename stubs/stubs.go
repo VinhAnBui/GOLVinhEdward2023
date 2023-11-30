@@ -30,6 +30,9 @@ type WorkerRequest struct {
 	ImageHeight int
 	Turns       int
 }
+type CurrentWorldRequest struct {
+	Turns int
+}
 
 //Worker and worker stubs
 type RowSwap struct {

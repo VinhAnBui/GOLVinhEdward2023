@@ -1,2 +1,4 @@
+github.com/ChrisGora/semaphore v1.0.0 h1:+8iNL5i426tqjHJwlqsMaH7D9eEiU5vmk00eEuqFdWo=
+github.com/ChrisGora/semaphore v1.0.0/go.mod h1:wwAuK+zqnPweFwSjwiQNtOsZua9khcA6q4/R04KQzxA=
 github.com/veandco/go-sdl2 v0.4.4 h1:coOJGftOdvNvGoUIZmm4XD+ZRQF4mg9ZVHmH3/42zFQ=
 github.com/veandco/go-sdl2 v0.4.4/go.mod h1:FB+kTpX9YTE+urhYiClnRzpOXbiWgaU3+5F2AB78DPg=

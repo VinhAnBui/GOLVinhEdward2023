@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ChrisGora/semaphore"
 	"net"
 	"net/rpc"
 	"sync"
@@ -11,15 +12,45 @@ import (
 )
 
 var (
-	topRowIn   [][]byte
-	topRowInmx sync.Mutex
-
-	topRowOut   [][]byte
-	topRowOutmx sync.Mutex
+	topRowIn         = newBuffer(3)
+	topRowInmx       sync.Mutex
+	inWorkAvailable  = semaphore.Init(3, 0)
+	topRowOut        = newBuffer(3)
+	outWorkAvailable = semaphore.Init(3, 0)
+	topRowOutmx      sync.Mutex
 
 	turnLock sync.Mutex
-	ch       chan int
+	command  chan int
+	world    chan [][]byte
+	turn     chan int
 )
+
+type buffer struct {
+	b                 [][]byte
+	size, read, write int
+}
+
+func newBuffer(size int) buffer {
+	return buffer{
+		b:     make([][]byte, size),
+		size:  size,
+		read:  0,
+		write: 0,
+	}
+}
+
+func (buffer *buffer) get() []byte {
+	x := buffer.b[buffer.read]
+	fmt.Println("Get\t\t", x, "\t", buffer)
+	buffer.read = (buffer.read + 1) % len(buffer.b)
+	return x
+}
+
+func (buffer *buffer) put(x []byte) {
+	buffer.b[buffer.write] = x
+	fmt.Println("Put\t\t", x, "\t", buffer)
+	buffer.write = (buffer.write + 1) % len(buffer.b)
+}
 
 //GOL logic
 //count3x3 counts how many live cells there are in a 3 x 3 area centered around some x y
@@ -126,7 +157,6 @@ func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.Work
 	return
 }
 func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.WorkerResponse) (err error) {
-	topRowOutmx.Lock()
 	fmt.Println(req.Turns)
 	worldEven := req.WorldEven
 	worldOdd := make([][]byte, req.ImageHeight)
@@ -139,21 +169,29 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 		//turnLock.Lock()
 		if turn%2 == 0 {
 			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldEven, worldOdd)
+			topRowOutmx.Lock()
+			buffer.put(topRowOut, worldOdd[1])
+			outWorkAvailable.Post()
 			topRowOutmx.Unlock()
 			worldOdd[req.ImageHeight-1] = callRowExchange(worldOdd[1], req.Client)
+			inWorkAvailable.Wait()
 			topRowInmx.Lock()
-			worldOdd[0] = topRowIn[0]
+			worldOdd[0] = buffer.get(topRowIn)
 		} else {
 			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
+			topRowOutmx.Lock()
+			buffer.put(topRowOut, worldEven[1])
+			outWorkAvailable.Post()
 			topRowOutmx.Unlock()
-			worldOdd[req.ImageHeight-1] = callRowExchange(worldEven[1], req.Client) //exchanges bottom row
+			worldEven[req.ImageHeight-1] = callRowExchange(worldEven[1], req.Client)
+			inWorkAvailable.Wait()
 			topRowInmx.Lock()
-			worldOdd[0] = topRowIn[0] //exchanges top row
+			worldEven[0] = buffer.get(topRowIn) //exchanges top row
 		}
-		topRowIn = topRowIn[1:]
 		topRowInmx.Unlock()
 		turn++
-		topRowOutmx.Lock()
+		//turnLock.Unlock()
+
 	}
 	//deadlock occurs without this line
 	//turnLock.Lock()
@@ -170,11 +208,12 @@ type RowExchange struct{}
 
 func (t *RowExchange) RowExchange(req stubs.RowSwap, res *stubs.RowSwap) (err error) {
 	topRowInmx.Lock()
-	topRowIn = append(topRowIn, req.Row)
+	buffer.put(topRowIn, req.Row)
+	inWorkAvailable.Post()
 	topRowInmx.Unlock()
+	outWorkAvailable.Wait()
 	topRowOutmx.Lock()
-	res.Row = topRowOut[0]
-	topRowOut = topRowOut[1:]
+	res.Row = buffer.get(topRowOut)
 	topRowOutmx.Unlock()
 	return
 }

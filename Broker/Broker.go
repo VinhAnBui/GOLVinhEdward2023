@@ -63,14 +63,14 @@ func pluralCalls(req stubs.DistributorRequest) [][]byte {
 	newRequest.ImageWidth = req.ImageWidth
 	for i, v := range workerList {
 		startY := i * heightsplit
-		endY := i + 1*heightsplit
+		endY := i + 1*heightsplit + 2
 		if endY > req.ImageHeight {
-			endY = req.ImageHeight
+			newRequest.WorldEven = req.WorldEven[startY:req.ImageHeight]
+			newRequest.WorldEven = append(newRequest.WorldEven, req.WorldEven[1])
+		} else {
+			newRequest.WorldEven = req.WorldEven[startY:endY]
 		}
-
-		newRequest.ImageHeight = endY - startY
-		newRequest.WorldEven = req.WorldEven[startY:endY]
-
+		newRequest.ImageHeight = len(newRequest.WorldEven)
 		if i < workers {
 			newRequest.Client = workerList[i+1]
 		} else {
@@ -82,7 +82,9 @@ func pluralCalls(req stubs.DistributorRequest) [][]byte {
 	for i := 0; i < workers; i++ {
 		part := <-out[i]
 		finishedWorld = append(finishedWorld, part...)
+
 	}
+	finishedWorld = append(finishedWorld[1:], finishedWorld[0])
 	return finishedWorld
 }
 
@@ -115,7 +117,7 @@ func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.Distributor
 	workerListmx.Lock()
 
 	if len(workerList) <= 0 {
-		return errors.New("No Workers")
+		return errors.New("no Workers")
 	}
 	if len(workerList) == 1 {
 		res.World = singleCall(workerList[0], req)
