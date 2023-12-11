@@ -123,6 +123,7 @@ func getOutboundIP() string {
 	defer func(conn net.Conn) {
 		err := conn.Close()
 		if err != nil {
+			fmt.Println(err)
 
 		}
 	}(conn)
