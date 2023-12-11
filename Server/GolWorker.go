@@ -127,8 +127,8 @@ func getOutboundIP() string {
 
 		}
 	}(conn)
-
 	localAddr := conn.LocalAddr().(*net.UDPAddr).IP.String()
+	fmt.Println(localAddr)
 	return localAddr
 }
 
