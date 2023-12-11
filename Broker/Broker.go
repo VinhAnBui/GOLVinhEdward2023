@@ -26,6 +26,7 @@ func active() {
 }
 func subscribe(factoryAddress string) (err error) {
 	fmt.Println("Subscription request")
+
 	client, err := rpc.Dial("tcp", factoryAddress)
 	if err == nil {
 		workerList = append(workerList, client)
@@ -134,21 +135,20 @@ func main() {
 	flag.Parse()
 	err := rpc.Register(&Broker{})
 	if err != nil {
-		fmt.Println("err")
+		fmt.Println(err)
 		return
 	}
 	err = rpc.Register(&AllTurns{})
 	if err != nil {
-		fmt.Println("err")
+		fmt.Println(err)
 		return
 	}
 	listener, _ := net.Listen("tcp", ":"+*pAddr)
 	go active()
-	defer func(listener net.Listener) {
-		err := listener.Close()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}(listener)
+	err = listener.Close()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	rpc.Accept(listener)
 }

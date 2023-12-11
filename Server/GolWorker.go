@@ -234,24 +234,24 @@ func active() {
 }
 func main() {
 	// Parse command-line arguments to get the port
-	brokerAddr := flag.String("broker", "172.31.88.20:8030", "Address of broker instance")
+	brokerAddr := flag.String("broker", "3.94.78.254:8030", "Address of broker instance")
 	pAddr := flag.String("port", "8050", "Port to listen on")
 	flag.Parse()
 	fmt.Println(brokerAddr)
 	client, _ := rpc.Dial("tcp", *brokerAddr)
 	fmt.Println("1")
 	status := new(stubs.StatusReport)
-	//registers itself as a worker to broker
-	err := client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
-	if err != nil {
-		fmt.Println(err)
-	}
 	// Register the RPC service
-	err = rpc.Register(&WorkerTurns{})
+	err := rpc.Register(&WorkerTurns{})
 	if err != nil {
 		fmt.Println(err)
 	}
 	err = rpc.Register(&RowExchange{})
+	if err != nil {
+		fmt.Println(err)
+	}
+	//registers itself as a worker to broker
+	err = client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
 	if err != nil {
 		fmt.Println(err)
 	}
