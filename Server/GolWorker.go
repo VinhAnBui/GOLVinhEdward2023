@@ -122,6 +122,7 @@ func getOutboundIP() string {
 	conn, _ := net.Dial("udp", "8.8.8.8:80")
 	defer conn.Close()
 	localAddr := conn.LocalAddr().(*net.UDPAddr).IP.String()
+	fmt.Println(localAddr)
 	return localAddr
 }
 
@@ -170,23 +171,23 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 		if turn%2 == 0 {
 			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldEven, worldOdd)
 			topRowOutmx.Lock()
-			buffer.put(topRowOut, worldOdd[1])
+			topRowOut.put(worldOdd[1])
 			outWorkAvailable.Post()
 			topRowOutmx.Unlock()
 			worldOdd[req.ImageHeight-1] = callRowExchange(worldOdd[1], req.Client)
 			inWorkAvailable.Wait()
 			topRowInmx.Lock()
-			worldOdd[0] = buffer.get(topRowIn)
+			worldOdd[0] = topRowOut.get()
 		} else {
 			stageConverter(1, req.ImageHeight-1, 0, req.ImageWidth, req.ImageHeight, req.ImageWidth, worldOdd, worldEven)
 			topRowOutmx.Lock()
-			buffer.put(topRowOut, worldEven[1])
+			topRowOut.put(worldEven[1])
 			outWorkAvailable.Post()
 			topRowOutmx.Unlock()
 			worldEven[req.ImageHeight-1] = callRowExchange(worldEven[1], req.Client)
 			inWorkAvailable.Wait()
 			topRowInmx.Lock()
-			worldEven[0] = buffer.get(topRowIn) //exchanges top row
+			worldEven[0] = topRowIn.get() //exchanges top row
 		}
 		topRowInmx.Unlock()
 		turn++
@@ -208,12 +209,12 @@ type RowExchange struct{}
 
 func (t *RowExchange) RowExchange(req stubs.RowSwap, res *stubs.RowSwap) (err error) {
 	topRowInmx.Lock()
-	buffer.put(topRowIn, req.Row)
+	topRowIn.put(req.Row)
 	inWorkAvailable.Post()
 	topRowInmx.Unlock()
 	outWorkAvailable.Wait()
 	topRowOutmx.Lock()
-	res.Row = buffer.get(topRowOut)
+	res.Row = topRowIn.get()
 	topRowOutmx.Unlock()
 	return
 }
@@ -222,19 +223,19 @@ func active() {
 	for {
 		i++
 		time.Sleep(10 * time.Second)
-		fmt.Println(i, "workers:")
+		fmt.Println("workers:", i)
 	}
 }
 func main() {
 	// Parse command-line arguments to get the port
-	brokerAddr := flag.String("broker", "127.0.0.1:8031", "Address of broker instance")
-	pAddr := flag.String("port", "8051", "Port to listen on")
+	brokerAddr := flag.String("broker", "127.0.0.1:8030", "Address of broker instance")
+	pAddr := flag.String("port", "8050", "Port to listen on")
 	flag.Parse()
 	fmt.Println(brokerAddr)
 	client, _ := rpc.Dial("tcp", *brokerAddr)
 	status := new(stubs.StatusReport)
 	//registers itself as a worker to broker
-	err := client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
+	err := client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status) //getOutboundIP()
 	if err != nil {
 		fmt.Println(err)
 	}

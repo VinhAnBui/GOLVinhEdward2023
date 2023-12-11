@@ -29,6 +29,7 @@ func subscribe(factoryAddress string) (err error) {
 	client, err := rpc.Dial("tcp", factoryAddress)
 	if err == nil {
 		workerList = append(workerList, client)
+		fmt.Println(workerList[0])
 	} else {
 		fmt.Println("Error subscribing ", factoryAddress)
 		fmt.Println(err)
@@ -129,7 +130,7 @@ func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.Distributor
 	return
 }
 func main() {
-	pAddr := flag.String("port", "8031", "Port to listen on")
+	pAddr := flag.String("port", "8030", "Port to listen on")
 	flag.Parse()
 	err := rpc.Register(&Broker{})
 	if err != nil {
