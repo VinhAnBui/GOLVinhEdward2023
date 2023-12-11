@@ -120,7 +120,13 @@ func callRowExchange(row []byte, client *rpc.Client) []byte {
 }
 func getOutboundIP() string {
 	conn, _ := net.Dial("udp", "8.8.8.8:80")
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+
+		}
+	}(conn)
+
 	localAddr := conn.LocalAddr().(*net.UDPAddr).IP.String()
 	return localAddr
 }
@@ -232,6 +238,7 @@ func main() {
 	flag.Parse()
 	fmt.Println(brokerAddr)
 	client, _ := rpc.Dial("tcp", *brokerAddr)
+	fmt.Println("1")
 	status := new(stubs.StatusReport)
 	//registers itself as a worker to broker
 	err := client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
