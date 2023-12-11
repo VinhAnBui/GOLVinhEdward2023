@@ -29,6 +29,7 @@ func subscribe(factoryAddress string) (err error) {
 	client, err := rpc.Dial("tcp", factoryAddress)
 	if err == nil {
 		workerList = append(workerList, client)
+		fmt.Println(workerList[0])
 	} else {
 		fmt.Println("Error subscribing ", factoryAddress)
 		fmt.Println(err)
