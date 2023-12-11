@@ -143,7 +143,11 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	listener, _ := net.Listen("tcp", ":"+*pAddr)
+	listener, err := net.Listen("tcp", ":"+*pAddr)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	go active()
 	err = listener.Close()
 	if err != nil {
