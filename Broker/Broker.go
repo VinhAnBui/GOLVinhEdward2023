@@ -144,4 +144,5 @@ func main() {
 	}
 	go active()
 	rpc.Accept(listener)
+	flag.Parse()
 }
