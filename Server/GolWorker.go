@@ -269,12 +269,5 @@ func main() {
 	fmt.Println("4")
 	go active()
 
-	defer func(listener net.Listener) {
-		err := listener.Close()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}(listener)
-
 	rpc.Accept(listener)
 }

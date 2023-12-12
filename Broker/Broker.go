@@ -143,10 +143,5 @@ func main() {
 		return
 	}
 	go active()
-	err = listener.Close()
-	if err != nil {
-		fmt.Println("3", err)
-		return
-	}
 	rpc.Accept(listener)
 }
