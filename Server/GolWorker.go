@@ -262,12 +262,12 @@ func main() {
 		fmt.Println("Error listening:", err)
 		return
 	}
+	rpc.Accept(listener)
+	go active()
 	defer func(listener net.Listener) {
 		err := listener.Close()
 		if err != nil {
 			fmt.Println(err)
 		}
 	}(listener)
-	go active()
-	rpc.Accept(listener)
 }
