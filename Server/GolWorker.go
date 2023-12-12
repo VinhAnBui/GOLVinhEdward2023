@@ -240,7 +240,6 @@ func main() {
 	fmt.Println(brokerAddr)
 	client, _ := rpc.Dial("tcp", *brokerAddr)
 	fmt.Println("1")
-	status := new(stubs.StatusReport)
 	// Register the RPC service
 	err := rpc.Register(&WorkerTurns{})
 	if err != nil {
@@ -261,18 +260,21 @@ func main() {
 		return
 	}
 	fmt.Println("3")
+	status := new(stubs.StatusReport)
 	err = client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	fmt.Println("4")
 	go active()
+
+	rpc.Accept(listener)
+
 	defer func(listener net.Listener) {
 		err := listener.Close()
 		if err != nil {
 			fmt.Println(err)
 		}
 	}(listener)
-
-	rpc.Accept(listener)
 }
