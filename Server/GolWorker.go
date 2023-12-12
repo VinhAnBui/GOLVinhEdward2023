@@ -163,6 +163,7 @@ func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.Work
 	} else {
 		res.World = worldOdd
 	}
+	fmt.Println("done")
 	return
 }
 func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.WorkerResponse) (err error) {
