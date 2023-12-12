@@ -73,7 +73,7 @@ func pluralCalls(req stubs.DistributorRequest) [][]byte {
 			newRequest.WorldEven = req.WorldEven[startY:endY]
 		}
 		newRequest.ImageHeight = len(newRequest.WorldEven)
-		if i > workers-1 {
+		if i >= workers-1 {
 			newRequest.Client = workerList[0]
 		} else {
 			newRequest.Client = workerList[i+1]
