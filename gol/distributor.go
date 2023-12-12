@@ -189,7 +189,7 @@ func distributor(p Params, c distributorChannels) {
 	//go every2seconds(worldOdd, worldEven, &turn, oddMutex, EvenMutex, turnLock, c.events)
 	//go waitKeypress(&turn, worldOdd, worldEven, turnLock, c, p)
 
-	server := flag.String("server", "172.31.88.20:8040", "IP:port string to connect to as server")
+	server := flag.String("server", "3.84.41.196:8040", "IP:port string to connect to as server")
 	flag.Parse()
 	client, err := rpc.Dial("tcp", *server)
 	fmt.Println("ERROR IS: ", err)

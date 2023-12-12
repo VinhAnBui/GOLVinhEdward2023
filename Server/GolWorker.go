@@ -234,7 +234,7 @@ func active() {
 }
 func main() {
 	// Parse command-line arguments to get the port
-	brokerAddr := flag.String("broker", "3.94.78.254:8040", "Address of broker instance")
+	brokerAddr := flag.String("broker", "3.84.41.196:8040", "Address of broker instance")
 	pAddr := flag.String("port", "8050", "Port to listen on")
 	flag.Parse()
 	fmt.Println(brokerAddr)
