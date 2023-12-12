@@ -180,7 +180,7 @@ func distributor(p Params, c distributorChannels) {
 	c.ioCommand <- ioInput
 	c.ioFilename <- filenameInput(p)
 	worldEven := recieveworld(c.ioInput, p, c.events)
-
+	fmt.Println("world recieved in distributor")
 	//controls access to the odd or even matrix
 	//var oddMutex = &sync.Mutex{}
 	//var EvenMutex = &sync.Mutex{}
@@ -202,7 +202,7 @@ func distributor(p Params, c distributorChannels) {
 		}
 	}(client)
 	world := makeCall(client, worldEven, p)
-
+	printworld(world)
 	//turnLock.Lock()
 	c.ioCommand <- ioOutput
 	c.ioFilename <- filenameOutput(p)
