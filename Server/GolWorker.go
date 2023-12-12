@@ -107,10 +107,11 @@ func stageConverter(startY, endY, startX, endX, height, width int, world, newWor
 }
 
 //rpc stuff
-func callRowExchange(row []byte, client *rpc.Client) []byte {
+func callRowExchange(row []byte, IP string) []byte {
 	req := stubs.RowSwap{}
 	req.Row = row
 	res := stubs.RowSwap{}
+	client, _ := rpc.Dial("tcp", IP)
 	err := client.Call(stubs.RowExchange, req, res)
 	if err != nil {
 		fmt.Println(err)
@@ -183,7 +184,7 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 			topRowOut.put(worldOdd[1])
 			outWorkAvailable.Post()
 			topRowOutmx.Unlock()
-			worldOdd[req.ImageHeight-1] = callRowExchange(worldOdd[1], req.Client)
+			worldOdd[req.ImageHeight-1] = callRowExchange(worldOdd[1], req.NextIP)
 			inWorkAvailable.Wait()
 			topRowInmx.Lock()
 			worldOdd[0] = topRowIn.get()
@@ -193,7 +194,7 @@ func (t *WorkerTurns) WorkerTurnsPlural(req stubs.WorkerRequest, res *stubs.Work
 			topRowOut.put(worldEven[1])
 			outWorkAvailable.Post()
 			topRowOutmx.Unlock()
-			worldEven[req.ImageHeight-1] = callRowExchange(worldEven[1], req.Client)
+			worldEven[req.ImageHeight-1] = callRowExchange(worldEven[1], req.NextIP)
 			inWorkAvailable.Wait()
 			topRowInmx.Lock()
 			worldEven[0] = topRowIn.get() //exchanges top row

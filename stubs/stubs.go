@@ -1,7 +1,5 @@
 package stubs
 
-import "net/rpc"
-
 var AllTurns = "Broker.AllTurns"
 var WorkerTurns = "WorkerTurns.WorkerTurnsSingle"
 var WorkersTurns = "WorkerTurns.WorkerTurnsPlural"
@@ -24,7 +22,7 @@ type WorkerResponse struct {
 	World [][]byte
 }
 type WorkerRequest struct {
-	Client      *rpc.Client
+	NextIP      string
 	WorldEven   [][]byte
 	ImageWidth  int
 	ImageHeight int

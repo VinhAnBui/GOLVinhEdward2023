@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	workerList   []*rpc.Client
+	workerList   []string
 	workerListmx sync.RWMutex
 )
 
 func active() {
+
 	i := 0
 	for {
 		i++
@@ -27,9 +28,9 @@ func active() {
 func subscribe(factoryAddress string) (err error) {
 	fmt.Println("Subscription request")
 
-	client, err := rpc.Dial("tcp", factoryAddress)
+	_, err = rpc.Dial("tcp", factoryAddress)
 	if err == nil {
-		workerList = append(workerList, client)
+		workerList = append(workerList, factoryAddress)
 		fmt.Println(workerList[0])
 	} else {
 		fmt.Println("Error subscribing ", factoryAddress)
@@ -74,9 +75,9 @@ func pluralCalls(req stubs.DistributorRequest) [][]byte {
 		}
 		newRequest.ImageHeight = len(newRequest.WorldEven)
 		if i >= workers-1 {
-			newRequest.Client = workerList[0]
+			newRequest.NextIP = workerList[0]
 		} else {
-			newRequest.Client = workerList[i+1]
+			newRequest.NextIP = workerList[i+1]
 		}
 		go pluralCall(newRequest, out[i], v)
 	}
@@ -90,8 +91,9 @@ func pluralCalls(req stubs.DistributorRequest) [][]byte {
 	return finishedWorld
 }
 
-func pluralCall(req stubs.WorkerRequest, rtrn chan [][]uint8, client *rpc.Client) {
+func pluralCall(req stubs.WorkerRequest, rtrn chan [][]uint8, ip string) {
 	response := new(stubs.WorkerResponse)
+	client, _ := rpc.Dial("tcp", ip)
 	err := client.Call(stubs.WorkerTurns, req, response)
 	if err != nil {
 		fmt.Println(err)
@@ -120,7 +122,8 @@ func (b *Broker) AllTurns(req stubs.DistributorRequest, res *stubs.DistributorRe
 		return errors.New("no Workers")
 	}
 	if len(workerList) == 1 {
-		res.World = singleCall(workerList[0], req)
+		client, _ := rpc.Dial("tcp", workerList[0])
+		res.World = singleCall(client, req)
 	}
 	if len(workerList) > 1 {
 		res.World = pluralCalls(req)
