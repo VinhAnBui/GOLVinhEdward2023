@@ -112,10 +112,7 @@ func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err
 	workerListmx.Unlock()
 	return err
 }
-
-type AllTurns struct{}
-
-func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.DistributorResponse) (err error) {
+func (b *Broker) AllTurns(req stubs.DistributorRequest, res *stubs.DistributorResponse) (err error) {
 	fmt.Println(req.Turns)
 	workerListmx.Lock()
 
@@ -140,11 +137,6 @@ func main() {
 		return
 	}
 
-	err = rpc.Register(&AllTurns{})
-	if err != nil {
-		fmt.Println("1", err)
-		return
-	}
 	listener, err := net.Listen("tcp", ":"+*pAddr)
 	if err != nil {
 		fmt.Println("2", err)
