@@ -138,10 +138,12 @@ func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.Work
 	fmt.Println("aaaaaaaaaaaaaa")
 	fmt.Println(req.Turns)
 	worldEven := req.WorldEven
+	fmt.Println("world made")
 	worldOdd := make([][]byte, req.ImageHeight)
 	for i := range worldOdd {
 		worldOdd[i] = make([]byte, req.ImageWidth)
 	}
+	fmt.Println("world made")
 	//var turnLock = &sync.Mutex{}
 	turn := 0
 	for turn < req.Turns {
@@ -153,9 +155,9 @@ func (t *WorkerTurns) WorkerTurnsSingle(req stubs.WorkerRequest, res *stubs.Work
 		}
 		turn++
 		turnLock.Unlock()
+		fmt.Println(turn)
 	}
 	//deadlock occurs without this line
-	turnLock.Lock()
 	if turn%2 == 0 {
 		res.World = worldEven
 	} else {
