@@ -107,7 +107,14 @@ func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err
 	fmt.Println(req.FactoryAddress)
 	err = subscribe(req.FactoryAddress)
 	if err != nil {
-		res.Message = "Error during subscription"
+
+	} else {
+		client, err := rpc.Dial("tcp", req.FactoryAddress)
+		if err != nil {
+			fmt.Println("call:", err)
+		} else {
+			workerList = append(workerList, client)
+		}
 	}
 	workerListmx.Unlock()
 	return err
