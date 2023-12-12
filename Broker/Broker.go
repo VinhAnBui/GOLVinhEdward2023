@@ -104,6 +104,7 @@ type Broker struct{}
 
 func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err error) {
 	workerListmx.Lock()
+	fmt.Println(req.FactoryAddress)
 	err = subscribe(req.FactoryAddress)
 	if err != nil {
 		res.Message = "Error during subscription"
