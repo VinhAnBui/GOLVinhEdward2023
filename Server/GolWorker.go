@@ -250,11 +250,9 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println("2")
 	//registers itself as a worker to broker
-	err = client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
-	if err != nil {
-		fmt.Println(err)
-	}
+
 	// Listen for incoming connections on the specified port
 	listener, err := net.Listen("tcp", ":"+*pAddr)
 	if err != nil {
@@ -262,7 +260,12 @@ func main() {
 		fmt.Println("Error listening:", err)
 		return
 	}
-	rpc.Accept(listener)
+	fmt.Println("3")
+	err = client.Call(stubs.Subscribe, stubs.Subscription{FactoryAddress: getOutboundIP() + ":" + *pAddr}, status)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("4")
 	go active()
 	defer func(listener net.Listener) {
 		err := listener.Close()
@@ -270,4 +273,6 @@ func main() {
 			fmt.Println(err)
 		}
 	}(listener)
+
+	rpc.Accept(listener)
 }

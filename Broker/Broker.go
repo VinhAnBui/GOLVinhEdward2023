@@ -106,7 +106,9 @@ func (b *Broker) Subscribe(req stubs.Subscription, res *stubs.StatusReport) (err
 	workerListmx.Lock()
 	fmt.Println(req.FactoryAddress)
 	err = subscribe(req.FactoryAddress)
-	res.Message = "subscribed"
+	if err != nil {
+		res.Message = "Error during subscription"
+	}
 	workerListmx.Unlock()
 	return err
 }
@@ -137,6 +139,7 @@ func main() {
 		fmt.Println("0", err)
 		return
 	}
+
 	err = rpc.Register(&AllTurns{})
 	if err != nil {
 		fmt.Println("1", err)
