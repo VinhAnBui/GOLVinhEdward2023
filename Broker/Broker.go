@@ -131,27 +131,27 @@ func (t *AllTurns) AllTurns(req stubs.DistributorRequest, res *stubs.Distributor
 	return
 }
 func main() {
-	pAddr := flag.String("port", "8040", "Port to listen on")
+	pAddr := flag.String("port", "8050", "Port to listen on")
 	flag.Parse()
 	err := rpc.Register(&Broker{})
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("0", err)
 		return
 	}
 	err = rpc.Register(&AllTurns{})
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("1", err)
 		return
 	}
 	listener, err := net.Listen("tcp", ":"+*pAddr)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("2", err)
 		return
 	}
 	go active()
 	err = listener.Close()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("3", err)
 		return
 	}
 	rpc.Accept(listener)
